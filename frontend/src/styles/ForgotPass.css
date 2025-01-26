@@ -1,0 +1,114 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background-color: #f0f2f5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: #333;
+}
+
+.forgot-password-container {
+    display: flex;
+    width: 60vh;
+    height: auto;
+    max-width: 100%;
+    background-color: white;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 0 auto;
+    flex-direction: column;
+    padding: 20px;
+}
+
+.forgot-password-box {
+    flex: 1;
+    padding: 20px;
+}
+
+.forgot-password-box h2 {
+    margin-bottom: 20px;
+    color: #333;
+    font-size: 24px;
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+}
+
+.forgot-password-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 16px;
+}
+
+.forgot-password-button {
+    width: 50%;
+    padding: 10px;
+    background-color: #40648a;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+    display: block;
+    margin: 0 auto;
+    margin-top: 5px;
+}
+
+.forgot-password-button:hover {
+    background-color: #0056b3;
+}
+
+.forgot-password-image {
+    flex: 1;
+    background: url('/pages/assets/parkingspot-1.png') no-repeat center center;
+    background-size: cover;
+    display: none;
+}
+
+/*Responsivety as product owner asked*/
+@media (max-width: 768px) {
+    .forgot-password-container {
+        width: 90vw;
+        padding: 20px;
+    }
+
+    .forgot-password-box {
+        padding: 20px;
+        /* Adjust padding for smaller screens */
+    }
+
+    .forgot-password-box h2 {
+        font-size: 18px;
+    }
+
+    .forgot-password-input {
+        font-size: 14px;
+    }
+
+    .forgot-password-button {
+        padding: 8px;
+        font-size: 14px;
+        text-align: center;
+    }
+
+    .forgot-password-image {
+        display: none;
+        /* Hide image in the form */
+    }
+}
+
+h4 {
+    color: #333;
+}
