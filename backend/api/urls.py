@@ -1,4 +1,4 @@
-from django.urls import path
+'''from django.urls import path
 from . import views
 from .views import UnapprovedOperatorsView, AuthorizeOperatorView,UserDetailView, RejectOperatorView, AllAuthorizedOperatorsView, CreateParkingSpotsMapView, ParkingSpotsMapView, FlipParkingSpotStatusView2, FlipParkingSpotStatusView,ParkingSpotsView, ForgotPasswordView, ResetPasswordView, UnapprovedMapsView, AllAuthorizedMapsView, RejectMapView,AuthorizeMapView, UpdatePhoneNumberView, OrganizationsView, CreateMapReportView, GetMapReportsView, DeleteMapReportView
 
@@ -28,4 +28,17 @@ urlpatterns = [
    path('map-reports/<int:map_id>/', GetMapReportsView.as_view(), name='get_map_reports'),
    path('map-report/<int:report_id>/', DeleteMapReportView.as_view(), name='delete_map_report'),
 
+]
+'''
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import CreateUserView, AnalysisViewSet
+
+router = DefaultRouter()
+router.register(r'analysis', AnalysisViewSet, basename='analysis')
+
+urlpatterns = [
+    path('signup/', CreateUserView.as_view(), name='create_user'),
+    path('detect/', AnalysisViewSet.as_view({'post': 'create'}), name='detect'),
+    path('', include(router.urls)),
 ]

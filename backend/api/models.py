@@ -1,4 +1,4 @@
-from django.db import models
+'''from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import transaction, OperationalError
 
@@ -206,3 +206,46 @@ class MapReport(models.Model):
 
     def __str__(self):
         return f"Report for Map {self.parking_map.id}"
+'''
+'''
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+class CustomUser(AbstractUser):
+    # Add custom fields here if needed
+    pass
+
+class Analysis(models.Model):
+    user = models.ForeignKey('api.CustomUser', on_delete=models.CASCADE)
+    video = models.FileField(upload_to='uploads/')
+    result = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+'''
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+import json
+
+class CustomUser(AbstractUser):
+    pass
+
+class Analysis(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    video = models.FileField(upload_to='uploads/')
+    result = models.TextField()  # Changed from JSONField to TextField
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def set_result(self, value):
+        self.result = json.dumps(value)
+    
+    def get_result(self):
+        try:
+            return json.loads(self.result)
+        except:
+            return {}

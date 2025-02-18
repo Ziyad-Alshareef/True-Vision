@@ -1,4 +1,4 @@
-from api.models import User
+'''from api.models import User
 from rest_framework import serializers
 from .models import Note, MapReport
 
@@ -92,3 +92,81 @@ class MapReportSerializer(serializers.ModelSerializer):
         fields = ['id', 'parking_map', 'text', 'created_at', 
                  'font_size', 'font_family', 'text_align', 
                  'font_weight', 'font_style']
+'''
+# api/serializers.py
+
+'''
+from rest_framework import serializers
+from .models import CustomUser, Analysis
+
+class CustomUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ('id', 'username', 'password', 'email')
+    
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data.get('email', ''),
+            password=validated_data['password']
+        )
+        return user
+
+class AnalysisSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Analysis
+        fields = ('id', 'user', 'video', 'result', 'created_at')
+        read_only_fields = ('user', 'created_at')
+
+    '''
+
+from rest_framework import serializers
+from .models import Analysis,CustomUser
+import json
+
+class AnalysisSerializer(serializers.ModelSerializer):
+    result = serializers.JSONField()  # This will handle the JSON serialization/deserialization
+
+    class Meta:
+        model = Analysis
+        fields = ('id', 'user', 'video', 'result', 'created_at')
+        read_only_fields = ('user', 'created_at')
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        # Convert the stored string back to JSON when retrieving
+        try:
+            ret['result'] = json.loads(instance.result)
+        except:
+            ret['result'] = {}
+        return ret
+
+    def to_internal_value(self, data):
+        # Convert JSON to string when saving
+        if 'result' in data and not isinstance(data['result'], str):
+            data = data.copy()
+            data['result'] = json.dumps(data['result'])
+        return super().to_internal_value(data)
+    
+
+    
+class CustomUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = CustomUser
+        fields = ('id', 'username', 'email', 'password')
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True}
+        }
+    
+    def create(self, validated_data):
+        user = CustomUser.objects.create_user(
+            username=validated_data['username'],
+            email=validated_data['email'],
+            password=validated_data['password']
+        )
+        return user

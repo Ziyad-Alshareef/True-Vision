@@ -1,4 +1,63 @@
-from django.shortcuts import render
+from rest_framework import status
+from rest_framework import generics, viewsets
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from .models import CustomUser, Analysis
+from .serializers import CustomUserSerializer, AnalysisSerializer
+from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework import serializers
+
+class CreateUserView(generics.CreateAPIView):
+    queryset = CustomUser.objects.all()
+    serializer_class = CustomUserSerializer
+    permission_classes = (AllowAny,)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            self.perform_create(serializer)
+            return Response(
+                {"message": "User created successfully"},
+                status=status.HTTP_201_CREATED
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class AnalysisViewSet(viewsets.ModelViewSet):
+    queryset = Analysis.objects.all()
+    serializer_class = AnalysisSerializer
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def get_queryset(self):
+        return Analysis.objects.filter(user=self.request.user)
+    
+    def create(self, request, *args, **kwargs):
+        video = request.FILES.get('video')
+        if not video:
+            return Response(
+                {"error": "No video file provided"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        result = {
+            "is_fake": False,
+            "confidence": 95.5
+        }
+        
+        serializer = self.get_serializer(data={
+            'video': video,
+            'result': result
+        })
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+'''from django.shortcuts import render
 from api.models import User
 from rest_framework.views import APIView
 from rest_framework import generics
@@ -387,3 +446,7 @@ class DeleteMapReportView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except MapReport.DoesNotExist:
             return Response({"detail": "Report not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+            '''
+

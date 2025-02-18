@@ -1,21 +1,10 @@
-/*import Form from "../components/Form"
-
-function Login() {
-    return <Form route="/api/token/" method="login" />
-}
-
-export default Login
-
-
-*/
-
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from "../api";
-
-const Login = () => {
+const SignUp = () => {
   const [formData, setFormData] = useState({
     username: '',
+    email: '',
     password: ''
   });
   const navigate = useNavigate();
@@ -23,21 +12,18 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/api/token/', formData);
-      if (response.status === 200) {
-        const data = response.data;
-        localStorage.setItem('access', data.access);
-        localStorage.setItem('refresh', data.refresh);
-        navigate('/dashboard');
+      const response = await api.post('/api/signup/', formData);
+      if (response.status === 201) {
+        navigate('/login');
       }
     } catch (error) {
-      console.error('Login error:', error);
+      console.error('Signup error:', error);
     }
   };
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg">
-      <h2 className="text-2xl font-bold mb-6 text-white">Sign in</h2>
+      <h2 className="text-2xl font-bold mb-6 text-white">Create an account</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <input
@@ -46,6 +32,15 @@ const Login = () => {
             className="w-full p-2 rounded bg-gray-700 text-white"
             value={formData.username}
             onChange={(e) => setFormData({...formData, username: e.target.value})}
+          />
+        </div>
+        <div className="mb-4">
+          <input
+            type="email"
+            placeholder="Email"
+            className="w-full p-2 rounded bg-gray-700 text-white"
+            value={formData.email}
+            onChange={(e) => setFormData({...formData, email: e.target.value})}
           />
         </div>
         <div className="mb-4">
@@ -61,21 +56,16 @@ const Login = () => {
           type="submit"
           className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
         >
-          Login
+          Sign Up
         </button>
       </form>
       <div className="mt-4 text-center text-gray-400">
-        <Link to="/reset-password" className="hover:text-green-500">
-          Forgot Password?
-        </Link>
-      </div>
-      <div className="mt-4 text-center text-gray-400">
-        Don't have an account?{' '}
-        <Link to="/signup" className="text-green-500 hover:text-green-400">
-          Sign Up
+        Already have an account?{' '}
+        <Link to="/login" className="text-green-500 hover:text-green-400">
+          Sign In
         </Link>
       </div>
     </div>
   );
 };
-export default Login;
+export default SignUp;
