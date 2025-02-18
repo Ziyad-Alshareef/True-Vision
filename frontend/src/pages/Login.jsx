@@ -12,6 +12,7 @@ export default Login
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from "../api";
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -19,6 +20,7 @@ const Login = () => {
     password: ''
   });
   const navigate = useNavigate();
+  const { login } = useAuth();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -28,6 +30,7 @@ const Login = () => {
         const data = response.data;
         localStorage.setItem('access', data.access);
         localStorage.setItem('refresh', data.refresh);
+        login();
         navigate('/dashboard');
       }
     } catch (error) {

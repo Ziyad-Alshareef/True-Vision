@@ -1,6 +1,7 @@
 import UploadArea from '../components/UploadArea';
 import '../app.css';
 import api from "../api";
+import Layout from '../components/Layout';
 
 const Home = () => {
     const handleUpload = async (file) => {
