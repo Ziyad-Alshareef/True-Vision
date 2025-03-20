@@ -40,7 +40,7 @@ const Login = () => {
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg">
-      <h2 className="text-2xl font-bold mb-6 text-white">Sign in</h2>
+      <h2 className="text-2xl font-bold mb-6 text-white">Sign in j</h2>
       <form onSubmit={handleSubmit}>
         <div className="mb-4">
           <input
