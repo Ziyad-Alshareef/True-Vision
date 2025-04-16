@@ -8,22 +8,25 @@ import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
 import ResetPassword from './pages/ResetPassword';
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <Router>
-        {/*<Layout>*/}
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/signup" element={<SignUp />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-          </Routes>
-        {/*</Layout>*/}
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          {/*<Layout>*/}
+            <Routes>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<SignUp />} />
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+            </Routes>
+          {/*</Layout>*/}
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 };
 
