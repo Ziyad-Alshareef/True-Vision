@@ -1,3 +1,183 @@
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+import json
+from django.utils import timezone
+import random
+import datetime
+from storages.backends.s3boto3 import S3Boto3Storage
+import os
+import subprocess
+import tempfile
+from django.core.files.base import ContentFile
+from PIL import Image
+import io
+
+class S3MediaStorage(S3Boto3Storage):
+    """Custom S3 storage for media files"""
+    location = 'media'
+    file_overwrite = False
+    default_acl = None  # Disable ACL
+
+class S3FrameStorage(S3Boto3Storage):
+    """Custom S3 storage for video frames"""
+    location = 'frames'
+    file_overwrite = False
+    default_acl = None  # Disable ACL
+
+class CustomUser(AbstractUser):
+    """Custom user model extending Django's AbstractUser"""
+    reset_password_pin = models.CharField(max_length=6, blank=True, null=True)
+    reset_password_pin_expiration = models.DateTimeField(blank=True, null=True)
+    
+    def generate_reset_pin(self):
+        """Generate a 6-digit PIN for password reset"""
+        self.reset_password_pin = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+        self.reset_password_pin_expiration = timezone.now() + datetime.timedelta(minutes=10)  # 10 minutes expiration
+        self.save()
+        return self.reset_password_pin
+    
+    def is_reset_pin_valid(self, input_pin):
+        """Check if the reset PIN is valid and not expired"""
+        if not self.reset_password_pin or not self.reset_password_pin_expiration:
+            return False
+        if self.reset_password_pin != input_pin:
+            return False
+        if timezone.now() > self.reset_password_pin_expiration:
+            return False
+        return True
+    
+    def clear_reset_pin(self):
+        """Clear the reset PIN after it's used"""
+        self.reset_password_pin = None
+        self.reset_password_pin_expiration = None
+        self.save()
+
+class Model(models.Model):
+    """ML model metadata"""
+    Model_id = models.AutoField(primary_key=True)
+    Name = models.CharField(max_length=255)
+    Version = models.CharField(max_length=255)
+    Description = models.TextField()
+
+class Video(models.Model):
+    """Video file and metadata"""
+    Video_id = models.AutoField(primary_key=True)
+    User_id = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    Video_File = models.FileField(storage=S3MediaStorage(), upload_to='videos/', null=True)
+    Video_Path = models.TextField(help_text="S3 path to the video file")
+    Thumbnail = models.ImageField(storage=S3MediaStorage(), upload_to='thumbnails/', null=True, blank=True, help_text="Representative frame of the video")
+    isAnalyzed = models.BooleanField(default=False)
+    size = models.BigIntegerField()
+    Length = models.IntegerField()
+    Resolution = models.CharField(max_length=255)
+    Uploaded_at = models.DateTimeField(auto_now_add=True)
+    Frame_per_Second = models.BigIntegerField()
+    
+    def save(self, *args, **kwargs):
+        """Override save to update Video_Path from Video_File and generate thumbnail"""
+        is_new = self.pk is None
+        
+        # First save to get the file path
+        super().save(*args, **kwargs)
+        
+        # Update Video_Path if not set
+        if self.Video_File and not self.Video_Path:
+            self.Video_Path = self.Video_File.url
+            super().save(update_fields=['Video_Path'])
+        
+        # Generate thumbnail if this is a new video and we don't have a thumbnail yet
+        if is_new and self.Video_File and not self.Thumbnail:
+            self.generate_thumbnail()
+            super().save(update_fields=['Thumbnail'])
+    
+    def generate_thumbnail(self):
+        """Generate a thumbnail from the video"""
+        try:
+            # Create a temporary file
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_thumb:
+                temp_thumb_path = temp_thumb.name
+            
+            # Save the video to a temporary file if using S3
+            if hasattr(self.Video_File, 'url'):
+                with tempfile.NamedTemporaryFile(suffix=os.path.splitext(self.Video_File.name)[1], delete=False) as temp_video:
+                    temp_video_path = temp_video.name
+                    # Download the file from S3
+                    temp_video.write(self.Video_File.read())
+            else:
+                # The file is local
+                temp_video_path = self.Video_File.path
+            
+            # Use ffmpeg to extract a frame from the middle of the video
+            cmd = [
+                'ffmpeg',
+                '-i', temp_video_path,
+                '-ss', '00:00:05',  # 5 seconds into the video
+                '-vframes', '1',
+                '-f', 'image2',
+                temp_thumb_path
+            ]
+            subprocess.run(cmd, check=True, capture_output=True)
+            
+            # Open the generated thumbnail
+            with open(temp_thumb_path, 'rb') as f:
+                thumb_data = f.read()
+            
+            # Resize if needed
+            img = Image.open(io.BytesIO(thumb_data))
+            # Keep aspect ratio but limit to 480px max dimension
+            img.thumbnail((480, 480))
+            
+            # Save to in-memory buffer
+            buffer = io.BytesIO()
+            img.save(buffer, format='JPEG')
+            buffer.seek(0)
+            
+            # Set the thumbnail field
+            file_name = f"thumbnail_{self.Video_id}.jpg"
+            self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
+            
+            # Clean up temp files
+            os.unlink(temp_thumb_path)
+            if hasattr(self.Video_File, 'url'):
+                os.unlink(temp_video_path)
+                
+        except Exception as e:
+            print(f"Error generating thumbnail: {e}")
+
+class Detection(models.Model):
+    """Detection results from video analysis"""
+    Result_id = models.AutoField(primary_key=True)
+    Video_id = models.ForeignKey(Video, on_delete=models.CASCADE)
+
+class DetectionModel(models.Model):
+    """Links models to detection results"""
+    Model_id = models.ForeignKey(Model, on_delete=models.CASCADE)
+    Result_id = models.ForeignKey(Detection, on_delete=models.CASCADE)
+    Confidence = models.DecimalField(max_digits=5, decimal_places=2, help_text="Confidence score (0-100)")
+    Result = models.CharField(max_length=255, choices=[
+        ('real', 'Real'),
+        ('fake', 'Fake'),
+    ])
+    Detected_at = models.DateTimeField(auto_now_add=True)
+
+class Analysis(models.Model):
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    video = models.FileField(upload_to='uploads/')
+    result = models.TextField()  # Changed from JSONField to TextField
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def set_result(self, value):
+        self.result = json.dumps(value)
+    
+    def get_result(self):
+        try:
+            return json.loads(self.result)
+        except:
+            return {}
+        
 '''from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import transaction, OperationalError
@@ -224,28 +404,3 @@ class Analysis(models.Model):
     class Meta:
         ordering = ['-created_at']
 '''
-
-from django.contrib.auth.models import AbstractUser
-from django.db import models
-import json
-
-class CustomUser(AbstractUser):
-    pass
-
-class Analysis(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    video = models.FileField(upload_to='uploads/')
-    result = models.TextField()  # Changed from JSONField to TextField
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-    
-    def set_result(self, value):
-        self.result = json.dumps(value)
-    
-    def get_result(self):
-        try:
-            return json.loads(self.result)
-        except:
-            return {}

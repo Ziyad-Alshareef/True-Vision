@@ -2,13 +2,23 @@ from rest_framework import status
 from rest_framework import generics, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from .models import CustomUser, Analysis
+from rest_framework.views import APIView
+from django.contrib.auth import get_user_model
+from .models import Analysis, Video, Model, Detection, DetectionModel, CustomUser
 from .serializers import CustomUserSerializer, AnalysisSerializer
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
+import boto3
+from django.conf import settings
+from botocore.exceptions import ClientError
+import os
+import json
+
+# Get the user model (now points to CustomUser)
+User = get_user_model()
 
 class CreateUserView(generics.CreateAPIView):
-    queryset = CustomUser.objects.all()
+    queryset = User.objects.all()
     serializer_class = CustomUserSerializer
     permission_classes = (AllowAny,)
 
@@ -56,6 +66,145 @@ class AnalysisViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
+# Add this new test view
+class S3TestView(APIView):
+    """View to test S3 connection"""
+    permission_classes = [AllowAny]  # Allow anyone to test for debugging
+    
+    def get(self, request):
+        """Test S3 connection and return bucket details"""
+        try:
+            # Get settings directly
+            from django.conf import settings
+            
+            # Debug: Print environment variables and settings
+            env_bucket = os.environ.get('AWS_STORAGE_BUCKET_NAME')
+            env_region = os.environ.get('AWS_S3_REGION_NAME')
+            settings_bucket = getattr(settings, 'AWS_STORAGE_BUCKET_NAME', 'not-set')
+            settings_region = getattr(settings, 'AWS_S3_REGION_NAME', 'not-set')
+            
+            # Create a boto3 session
+            session = boto3.session.Session(
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                region_name=settings_region  # Use settings value
+            )
+            
+            # Create S3 client
+            s3 = session.client('s3')
+            
+            # Get bucket details
+            bucket_name = settings_bucket  # Use settings value
+            bucket_exists = True
+            
+            try:
+                s3.head_bucket(Bucket=bucket_name)
+            except ClientError as e:
+                bucket_exists = False
+                error_code = e.response['Error']['Code']
+                error_message = e.response['Error']['Message']
+                return Response({
+                    'connected': False,
+                    'bucket_exists': False,
+                    'bucket_name': bucket_name,
+                    'env_bucket': env_bucket,  # Debug info
+                    'env_region': env_region,  # Debug info
+                    'settings_bucket': settings_bucket,  # Debug info
+                    'settings_region': settings_region,  # Debug info
+                    'error_code': error_code,
+                    'error_message': error_message
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # List some objects in the bucket (up to 5)
+            objects = s3.list_objects_v2(Bucket=bucket_name, MaxKeys=5)
+            object_list = []
+            
+            if 'Contents' in objects:
+                for obj in objects['Contents']:
+                    object_list.append({
+                        'key': obj['Key'],
+                        'size': obj['Size'],
+                        'last_modified': obj['LastModified'].strftime('%Y-%m-%d %H:%M:%S')
+                    })
+            
+            return Response({
+                'connected': True,
+                'bucket_exists': bucket_exists,
+                'bucket_name': bucket_name,
+                'env_bucket': env_bucket,  # Debug info
+                'env_region': env_region,  # Debug info
+                'settings_bucket': settings_bucket,  # Debug info
+                'settings_region': settings_region,  # Debug info
+                'region': settings_region,
+                'objects': object_list
+            })
+            
+        except Exception as e:
+            return Response({
+                'connected': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+# Also create a simple view to test uploading a video
+class VideoUploadTestView(APIView):
+    """Test view for uploading videos to S3"""
+    permission_classes = [AllowAny]  # Allow anyone for testing
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request, *args, **kwargs):
+        """Handle video upload and storage in S3"""
+        video_file = request.FILES.get('video')
+        
+        if not video_file:
+            return Response({'error': 'No video file provided'}, 
+                           status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Instead of creating a new user, get the first user or an admin user
+            try:
+                # Try to get a superuser first
+                user = User.objects.filter(is_superuser=True).first()
+                if not user:
+                    # If no superuser, get the first user
+                    user = User.objects.first()
+                if not user:
+                    # If no users exist at all, create a fallback error
+                    return Response({
+                        'success': False,
+                        'error': "No users exist in the database to associate with the upload"
+                    }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({
+                    'success': False,
+                    'error': f"Error finding user: {str(e)}"
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+            # Create a test analysis instead of a video
+            analysis = Analysis(
+                user=user,
+                video=video_file,
+                result=json.dumps({
+                    "is_fake": False,
+                    "confidence": 95.5
+                })
+            )
+            
+            # Save the analysis (this will upload to S3 if configured)
+            analysis.save()
+            
+            # Return success response
+            return Response({
+                'success': True,
+                'message': 'Video uploaded successfully',
+                'analysis_id': analysis.id,
+                'video_path': analysis.video.url if analysis.video else None
+            }, status=status.HTTP_201_CREATED)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 '''from django.shortcuts import render
 from api.models import User

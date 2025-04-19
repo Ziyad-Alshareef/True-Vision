@@ -32,7 +32,7 @@ urlpatterns = [
 '''
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CreateUserView, AnalysisViewSet
+from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView
 
 router = DefaultRouter()
 router.register(r'analysis', AnalysisViewSet, basename='analysis')
@@ -41,4 +41,8 @@ urlpatterns = [
     path('signup/', CreateUserView.as_view(), name='create_user'),
     path('detect/', AnalysisViewSet.as_view({'post': 'create'}), name='detect'),
     path('', include(router.urls)),
+    
+    # S3 testing routes
+    path('test/s3/', S3TestView.as_view(), name='test_s3_connection'),
+    path('test/upload/', VideoUploadTestView.as_view(), name='test_video_upload'),
 ]

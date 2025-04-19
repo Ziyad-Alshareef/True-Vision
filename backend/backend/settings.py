@@ -36,9 +36,6 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    "DEFAULT_PERMISSION_CLASSES": [
-        "rest_framework.permissions.IsAuthenticated",
-    ],
 }
 
 SIMPLE_JWT = {
@@ -58,6 +55,7 @@ INSTALLED_APPS = [
     "api",
     "rest_framework",
     "corsheaders",
+    "storages",
 ]
 AUTH_USER_MODEL = 'api.CustomUser'
 
@@ -143,6 +141,38 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'frontend/dist/assets')]
+
+# Media files configuration
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# AWS S3 Configuration (You will need to set these environment variables)
+# If AWS_ACCESS_KEY_ID is set, use S3 for storage, otherwise use local storage
+if os.environ.get('AWS_ACCESS_KEY_ID'):
+    # S3 Settings
+    AWS_ACCESS_KEY_ID = os.environ.get('AWS_ACCESS_KEY_ID')
+    AWS_SECRET_ACCESS_KEY = os.environ.get('AWS_SECRET_ACCESS_KEY')
+    
+    # Use direct values to ensure consistency
+    AWS_STORAGE_BUCKET_NAME = 'true-vision'  
+    AWS_S3_REGION_NAME = 'us-west-2'
+    
+    AWS_S3_ENDPOINT_URL = f'https://s3.{AWS_S3_REGION_NAME}.amazonaws.com'
+    AWS_S3_OBJECT_PARAMETERS = {
+        'CacheControl': 'max-age=86400',
+    }
+    
+    # Disable ACL since your bucket does not support them
+    AWS_DEFAULT_ACL = None
+    AWS_QUERYSTRING_AUTH = False
+    
+    AWS_LOCATION = 'media'
+    
+    # Enable S3 as the default file storage
+    DEFAULT_FILE_STORAGE = 'api.models.S3MediaStorage'
+    # For static files, you could also use S3 in production:
+    # STATICFILES_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
 
