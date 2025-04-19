@@ -3,9 +3,10 @@ import { Button } from '../components/ui/button';
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export const Detection = () => {
-  const { isDarkMode } = useTheme();
+  const { isDarkMode, isTransitioning } = useTheme();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -108,7 +109,14 @@ export const Detection = () => {
   };
 
   return (
-    <div className={`flex-grow ${isDarkMode ? 'bg-[#222222]' : 'bg-gray-50'} p-6`}>
+    <div className={`flex-grow w-full ${isDarkMode ? 'bg-[#222222]' : 'bg-gray-50'} p-6 ${
+      isTransitioning ? 'theme-transitioning' : ''
+    }`}>
+      {/* Theme Toggle Button - Fixed Position 
+      <div className="fixed top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>*/}
+      
       <div className="max-w-6xl mx-auto text-center">
         <h1 className="text-3xl font-semibold mb-2">
           <span className={isDarkMode ? 'text-white' : 'text-gray-800'}>New </span>

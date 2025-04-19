@@ -1,20 +1,32 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
-import logo from "./assets/whitefont-transpa.png";
+import whiteLogo from "./assets/whitefont-transpa.png";
+import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png"; 
 import { GreenCircle } from '../components/GreenCircle';
+import { useTheme } from '../context/ThemeContext';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export const Home = () => {
+  const { isDarkMode, isTransitioning } = useTheme();
+
   return (
-    <div className="min-h-screen bg-neutral-950 flex flex-col">
-        <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex flex-col ${
+      isTransitioning ? 'theme-transitioning' : ''
+    }`}>
+      {/* Theme Toggle Button - Fixed Position */}
+      <div className="fixed top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>
+    
+      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
       {/* Header */}
       <header className="p-6">
         <div className="flex items-center">
           <img
-            src={logo}
+            src={isDarkMode ? whiteLogo : darkLogo}
             alt="True Vision Logo"
             className="h-[90px] w-auto"
           />
@@ -40,10 +52,10 @@ export const Home = () => {
           {/* Right side - Content */}
           <div className="w-full md:w-1/2 text-center md:text-left">
             <h1 className="text-4xl font-bold mb-4">
-              <span className="text-white">True</span>{' '}
+              <span className={isDarkMode ? "text-white" : "text-gray-800"}>True</span>{' '}
               <span className="text-[#097F4D]">Vision</span>
             </h1>
-            <p className="text-gray-400 mb-8">
+            <p className={isDarkMode ? "text-gray-400 mb-8" : "text-gray-600 mb-8"}>
               Enabling you to easily identify deepfake videos using AI algorithms.
             </p>
             <div className="flex gap-4 justify-center md:justify-start">
@@ -79,7 +91,10 @@ export const Home = () => {
       </footer>
     </div>
   );
-};export default Home;
+};
+
+export default Home;
+
 
 
 /*import React from 'react';

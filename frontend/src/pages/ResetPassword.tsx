@@ -3,13 +3,17 @@ import { Link } from 'react-router-dom';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import api from "../api";
-import logo from "./assets/whitefont-transpa.png";
+import whiteLogo from "./assets/whitefont-transpa.png";
+import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
+import { useTheme } from '../context/ThemeContext';
+import { ThemeToggle } from '../components/ThemeToggle';
 
 export const ResetPassword = () => {
   const [email, setEmail] = useState('');
   
   const [message, setMessage] = useState<string>('');
+  const { isDarkMode, isTransitioning } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,19 +30,26 @@ export const ResetPassword = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4">
-        <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 ${
+      isTransitioning ? 'theme-transitioning' : ''
+    }`}>
+      {/* Theme Toggle Button - Fixed Position */}
+      <div className="fixed top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>
+    
+      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
           <img
-            src={logo}
+            src={isDarkMode ? whiteLogo : darkLogo}
             alt="True Vision Logo"
             className="mx-auto w-21 h-21 mb-8"
           />
-          <h2 className="mt-8 text-2xl font-medium text-white">Reset your Password</h2>
-          <p className="mt-4 text-sm text-gray-400">
+          <h2 className={`mt-8 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Reset your Password</h2>
+          <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
             Enter your Email address and we will send you instructions to reset your password.
           </p>
         </div>
@@ -54,7 +65,7 @@ export const ResetPassword = () => {
               placeholder="Email@gmail.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="bg-[#333333] border-none text-white placeholder:text-gray-400"
+              className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
             />
           </div>
 

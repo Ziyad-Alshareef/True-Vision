@@ -3,9 +3,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
+import { ThemeToggle } from '../components/ThemeToggle';
 import api from "../api";
-import logo from "./assets/whitefont-transpa.png";
+import whiteLogo from "./assets/whitefont-transpa.png";
+import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
+
 interface FormData {
     username: string;
     password: string;
@@ -15,8 +19,10 @@ interface LoginResponse {
     access: string;
     refresh: string;
   }
+
 export const Login = () => {
   const navigate = useNavigate();
+  const { isDarkMode, isTransitioning } = useTheme();
   const [formData, setFormData] = useState<FormData>({
     username: '',
     password: ''
@@ -42,20 +48,27 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 relative overflow-hidden ${
+      isTransitioning ? 'theme-transitioning' : ''
+    }`}>
+      {/* Theme Toggle Button - Fixed Position */}
+      <div className="fixed top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>
+    
       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
       <div className="w-full max-w-md space-y-8 relative z-10">
         <div className="text-center">
           <img
-            src={logo}
+            src={isDarkMode ? whiteLogo : darkLogo}
             alt="True Vision Logo"
             className="mx-auto w-21 h-21 mb-8"
           />
-          <h1 className="text-3xl font-semibold text-white mb-2">Welcome back</h1>
+          <h1 className={`text-3xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-2`}>Welcome back</h1>
           
-          <h2 className="mt-4 text-2xl font-medium text-white">Sign in</h2>
+          <h2 className={`mt-4 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Sign in</h2>
         </div>
 
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
@@ -66,7 +79,7 @@ export const Login = () => {
                 placeholder="Username"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className="bg-[#333333] border-none text-white placeholder:text-gray-400"
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
               />
             </div>
             <div>
@@ -75,7 +88,7 @@ export const Login = () => {
                 placeholder="Password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className="bg-[#333333] border-none text-white placeholder:text-gray-400"
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
               />
             </div>
           </div>
@@ -94,7 +107,7 @@ export const Login = () => {
           </Button>
 
           <div className="text-center text-sm">
-            <span className="text-gray-400">Don't have an account? </span>
+            <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Don't have an account? </span>
             <Link to="/signup" className="text-[#097F4D] hover:text-[#076b41]">
               Sign Up
             </Link>
@@ -110,6 +123,7 @@ export const Login = () => {
     </div>
   );
 };
+
 export default Login;
 /*import React, { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';

@@ -138,7 +138,7 @@ import {
     };
   
     return (
-      <div className={`flex h-screen ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-100'}`}>
+      <div className={`flex h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-100'}`}>
         <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>

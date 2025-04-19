@@ -3,6 +3,7 @@ import React, { createContext, useState, useContext, useEffect, ReactNode } from
 interface ThemeContextType {
   isDarkMode: boolean;
   toggleTheme: () => void;
+  isTransitioning: boolean;
 }
 
 interface ThemeProviderProps {
@@ -17,6 +18,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
     const savedTheme = localStorage.getItem('theme');
     return savedTheme ? savedTheme === 'dark' : true;
   });
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Effect to update the document class and localStorage when theme changes
   useEffect(() => {
@@ -30,11 +32,17 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
   }, [isDarkMode]);
 
   const toggleTheme = (): void => {
-    setIsDarkMode(prev => !prev);
+    setIsTransitioning(true);
+    // Small delay to allow animation to start before actual theme changes
+    setTimeout(() => {
+      setIsDarkMode(prev => !prev);
+      // Keep transitioning state for the duration of css transitions
+      setTimeout(() => setIsTransitioning(false), 300);
+    }, 50);
   };
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
+    <ThemeContext.Provider value={{ isDarkMode, toggleTheme, isTransitioning }}>
       {children}
     </ThemeContext.Provider>
   );

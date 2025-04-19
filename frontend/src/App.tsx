@@ -15,7 +15,7 @@ const App: React.FC = () => {
     <ThemeProvider>
       <AuthProvider>
         <Router>
-          {/*<Layout>*/}
+          <Layout>
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/login" element={<Login />} />
@@ -23,7 +23,7 @@ const App: React.FC = () => {
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/reset-password" element={<ResetPassword />} />
             </Routes>
-          {/*</Layout>*/}
+          </Layout>
         </Router>
       </AuthProvider>
     </ThemeProvider>
