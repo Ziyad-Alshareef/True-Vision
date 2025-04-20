@@ -162,7 +162,7 @@ class DetectionModel(models.Model):
 
 class Analysis(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    video = models.FileField(upload_to='uploads/')
+    video = models.FileField(storage=S3MediaStorage(), upload_to='uploads/')
     result = models.TextField()  # Changed from JSONField to TextField
     created_at = models.DateTimeField(auto_now_add=True)
     
