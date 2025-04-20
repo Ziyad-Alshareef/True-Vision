@@ -22,9 +22,11 @@ def get_ffmpeg_path():
         # Local development paths
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg.exe'),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg'),
-        # Heroku paths
+        # Standard Heroku paths
         '/app/vendor/ffmpeg/ffmpeg',
-        '/usr/bin/ffmpeg'
+        '/usr/bin/ffmpeg',
+        # Heroku buildpack location - most reliable for Heroku
+        '/app/vendor/ffmpeg/bin/ffmpeg',
     ]
     
     # Check if any of the paths exist
@@ -44,9 +46,11 @@ def get_ffprobe_path():
         # Local development paths
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe.exe'),
         os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe'),
-        # Heroku paths
+        # Standard Heroku paths
         '/app/vendor/ffmpeg/ffprobe',
-        '/usr/bin/ffprobe'
+        '/usr/bin/ffprobe',
+        # Heroku buildpack location - most reliable for Heroku
+        '/app/vendor/ffmpeg/bin/ffprobe',
     ]
     
     # Check if any of the paths exist
