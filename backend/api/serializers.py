@@ -168,14 +168,52 @@ class VideoSerializer(serializers.ModelSerializer):
         if obj.Thumbnail:
             # Get the full URL path including domain
             request = self.context.get('request')
-            if request is not None:
-                # For local development with relative URLs
-                if not obj.Thumbnail.url.startswith(('http://', 'https://')):
-                    return request.build_absolute_uri(obj.Thumbnail.url)
+            thumbnail_url = None
             
-            # For S3 URLs
-            thumbnail_url = obj.Thumbnail.url
-            print(f"Thumbnail URL for video {obj.Video_id}: {thumbnail_url}")
+            # First try to get a pre-signed URL for S3
+            try:
+                import boto3
+                from botocore.exceptions import ClientError
+                import os
+                from django.conf import settings
+                
+                # Extract the key from the Thumbnail URL
+                thumbnail_key = obj.Thumbnail.name
+                print(f"Thumbnail key for video {obj.Video_id}: {thumbnail_key}")
+                
+                # Create a boto3 session
+                session = boto3.session.Session(
+                    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                    region_name=os.environ.get('AWS_S3_REGION_NAME', 'us-west-2')
+                )
+                
+                s3_client = session.client('s3')
+                
+                # Get the bucket name
+                bucket_name = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'true-vision')
+                
+                # Generate a signed URL that lasts for 3600 seconds (1 hour)
+                signed_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={
+                        'Bucket': bucket_name,
+                        'Key': thumbnail_key
+                    },
+                    ExpiresIn=3600
+                )
+                
+                thumbnail_url = signed_url
+                print(f"Generated signed URL for thumbnail {obj.Video_id}: {thumbnail_url}")
+                
+            except Exception as e:
+                print(f"Error generating signed URL for thumbnail {obj.Video_id}: {str(e)}")
+                # Fall back to regular URL if signed URL generation fails
+                if request is not None and not obj.Thumbnail.url.startswith(('http://', 'https://')):
+                    thumbnail_url = request.build_absolute_uri(obj.Thumbnail.url)
+                else:
+                    thumbnail_url = obj.Thumbnail.url
+            
             return thumbnail_url
         return None
     
@@ -183,12 +221,54 @@ class VideoSerializer(serializers.ModelSerializer):
         if obj.Video_File:
             # Get the full URL path
             request = self.context.get('request')
-            if request is not None:
-                # For local development with relative URLs
-                if not obj.Video_File.url.startswith(('http://', 'https://')):
-                    return request.build_absolute_uri(obj.Video_File.url)
+            video_url = None
             
-            return obj.Video_File.url
+            # First try to get a pre-signed URL for S3
+            try:
+                import boto3
+                from botocore.exceptions import ClientError
+                import os
+                from django.conf import settings
+                
+                # Extract the key from the Video File URL
+                video_key = obj.Video_File.name
+                print(f"Video key for video {obj.Video_id}: {video_key}")
+                
+                # Create a boto3 session
+                session = boto3.session.Session(
+                    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                    region_name=os.environ.get('AWS_S3_REGION_NAME', 'us-west-2')
+                )
+                
+                s3_client = session.client('s3')
+                
+                # Get the bucket name
+                bucket_name = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'true-vision')
+                
+                # Generate a signed URL that lasts for 3600 seconds (1 hour)
+                signed_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={
+                        'Bucket': bucket_name,
+                        'Key': video_key
+                    },
+                    ExpiresIn=3600
+                )
+                
+                video_url = signed_url
+                print(f"Generated signed URL for video {obj.Video_id}: {video_url}")
+                
+            except Exception as e:
+                print(f"Error generating signed URL for video {obj.Video_id}: {str(e)}")
+                # Fall back to regular URL if signed URL generation fails
+                if request is not None and not obj.Video_File.url.startswith(('http://', 'https://')):
+                    video_url = request.build_absolute_uri(obj.Video_File.url)
+                else:
+                    video_url = obj.Video_File.url
+            
+            return video_url
+        
         return obj.Video_Path
     
     def get_user(self, obj):
