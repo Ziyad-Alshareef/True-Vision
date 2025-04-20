@@ -330,15 +330,15 @@ class Video(models.Model):
                 # If still not successful, try the thumbnail filter
                 if not success:
                     print("Using thumbnail filter as fallback")
-                # Fallback to a simpler approach
-                cmd = [
+                    # Fallback to a simpler approach
+                    cmd = [
                         get_ffmpeg_path(),
-                    '-i', temp_video_path,
-                    '-vf', 'thumbnail,scale=480:320',  # Use thumbnail filter
-                    '-frames:v', '1',
+                        '-i', temp_video_path,
+                        '-vf', 'thumbnail,scale=480:320',  # Use thumbnail filter
+                        '-frames:v', '1',
                         '-y',  # Force overwrite if file exists
-                    temp_thumb_path
-                ]
+                        temp_thumb_path
+                    ]
                     try:
                         # Run without check=True
                         thumb_result = subprocess.run(cmd, capture_output=True, text=True)
@@ -400,15 +400,15 @@ class Video(models.Model):
             
             # Resize if needed
             img = Image.open(io.BytesIO(thumb_data))
-                print(f"Thumbnail dimensions: {img.width}x{img.height}, mode: {img.mode}")
+            print(f"Thumbnail dimensions: {img.width}x{img.height}, mode: {img.mode}")
             # Keep aspect ratio but limit to 480px max dimension
             img.thumbnail((480, 480))
-                print(f"Resized to: {img.width}x{img.height}")
+            print(f"Resized to: {img.width}x{img.height}")
             
             # Ensure image is RGB (in case it's grayscale/RGBA)
             if img.mode != 'RGB':
                 img = img.convert('RGB')
-                    print(f"Converted image to RGB mode")
+            print(f"Converted image to RGB mode")
             
             # Increase brightness and contrast slightly if the image is dark
             enhancer = ImageEnhance.Brightness(img)
@@ -416,33 +416,29 @@ class Video(models.Model):
             
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(1.2)  # Increase contrast by 20%
-                print("Applied brightness and contrast enhancements")
+            print("Applied brightness and contrast enhancements")
             
             # Save to in-memory buffer
             buffer = io.BytesIO()
             img.save(buffer, format='JPEG', quality=95)
             buffer.seek(0)
-                print("Saved enhanced image to buffer")
+            print("Saved enhanced image to buffer")
             
             # Set the thumbnail field
             file_name = f"thumbnail_{self.Video_id}.jpg"
             self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
-                print(f"Successfully saved thumbnail as {file_name}")
+            print(f"Successfully saved thumbnail as {file_name}")
             
             # Clean up temp files
-                try:
-            os.unlink(temp_thumb_path)
-            if hasattr(self.Video_File, 'url'):
-                os.unlink(temp_video_path)
-                    print("Cleaned up temporary files")
-                except Exception as e:
-                    print(f"Error cleaning up: {str(e)}")
-                
-                return True
-            else:
-                print("All thumbnail generation attempts failed, creating placeholder")
-                raise Exception("Could not generate valid thumbnail")
-                
+            try:
+                os.unlink(temp_thumb_path)
+                if hasattr(self.Video_File, 'url'):
+                    os.unlink(temp_video_path)
+                print("Cleaned up temporary files")
+            except Exception as e:
+                print(f"Error cleaning up: {str(e)}")
+            
+            return True
         except Exception as e:
             print(f"Error in thumbnail generation process: {e}")
             # If all else fails, create a colored placeholder
@@ -452,24 +448,24 @@ class Video(models.Model):
                 
                 # Make absolutely sure this doesn't fail
                 try:
-                img = Image.new('RGB', (480, 320), color=(32, 127, 77))  # Green color
-                draw = ImageDraw.Draw(img)
+                    img = Image.new('RGB', (480, 320), color=(32, 127, 77))  # Green color
+                    draw = ImageDraw.Draw(img)
                     
                     # Try to add text, but don't fail if it doesn't work
                     try:
-                draw.text((240, 160), "True Vision", fill=(255, 255, 255), anchor="mm")
+                        draw.text((240, 160), "True Vision", fill=(255, 255, 255), anchor="mm")
                     except Exception as text_error:
                         print(f"Could not add text to placeholder: {text_error}")
                         # Continue without text
-                
-                # Save to buffer
-                buffer = io.BytesIO()
-                img.save(buffer, format='JPEG')
-                buffer.seek(0)
-                
-                # Save placeholder as thumbnail
-                file_name = f"placeholder_{self.Video_id}.jpg"
-                self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
+                    
+                    # Save to buffer
+                    buffer = io.BytesIO()
+                    img.save(buffer, format='JPEG')
+                    buffer.seek(0)
+                    
+                    # Save placeholder as thumbnail
+                    file_name = f"placeholder_{self.Video_id}.jpg"
+                    self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
                     print(f"Created placeholder thumbnail: {file_name}")
                     return False
                 except Exception as img_error:
