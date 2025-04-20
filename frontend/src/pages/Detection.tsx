@@ -98,18 +98,36 @@ export const Detection = () => {
         if (response.data && response.data.video_id) {
           localStorage.setItem('last_uploaded_video_id', response.data.video_id.toString());
           console.log('Stored video ID for highlighting:', response.data.video_id);
+          
+          // Store the direct S3 placeholder URL based on video ID
+          const placeholderUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/placeholder_${response.data.video_id}.jpg`;
+          localStorage.setItem('last_thumbnail_url', placeholderUrl);
+          console.log('Stored direct S3 placeholder URL:', placeholderUrl);
         }
         
         // Log the thumbnail URL if available
         if (response.data && response.data.thumbnail_path) {
           console.log('Thumbnail path in response:', response.data.thumbnail_path);
+          localStorage.setItem('last_api_thumbnail_url', response.data.thumbnail_path);
+          
+          // Also try to extract and store the S3 URL directly if it's not a direct URL
+          if (response.data.thumbnail_path && !response.data.thumbnail_path.startsWith('http')) {
+            // It's likely a relative path, convert to S3 URL
+            const filename = response.data.thumbnail_path.split('/').pop();
+            const s3Url = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/${filename}`;
+            localStorage.setItem('last_s3_thumbnail_url', s3Url);
+            console.log('Converted to S3 URL:', s3Url);
+          } else if (response.data.thumbnail_path) {
+            localStorage.setItem('last_s3_thumbnail_url', response.data.thumbnail_path);
+          }
         }
         
         // Pass a refresh flag and the video ID in the state
         navigate('/dashboard', { 
           state: { 
             refresh: true,
-            lastUploadedVideoId: response.data?.video_id
+            lastUploadedVideoId: response.data?.video_id,
+            directThumbnailUrl: localStorage.getItem('last_s3_thumbnail_url')
           }
         });
       }

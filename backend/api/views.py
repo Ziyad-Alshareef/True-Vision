@@ -336,6 +336,57 @@ class VideoViewSet(viewsets.ModelViewSet):
         
         return Response(serializer.data)
 
+class S3SignedURLView(APIView):
+    """Generate a signed URL for accessing S3 objects"""
+    permission_classes = [AllowAny]  # Allow anyone to access for debugging
+    
+    def get(self, request):
+        """Generate a signed URL for the given S3 key"""
+        s3_key = request.query_params.get('key')
+        
+        if not s3_key:
+            return Response({
+                'error': 'Missing S3 key parameter'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            # Create a boto3 session
+            session = boto3.session.Session(
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                region_name=os.environ.get('AWS_S3_REGION_NAME', 'us-west-2')
+            )
+            
+            s3_client = session.client('s3')
+            
+            # Get the bucket name
+            bucket_name = os.environ.get('AWS_STORAGE_BUCKET_NAME', 'true-vision')
+            
+            # Generate a signed URL that lasts for 3600 seconds (1 hour)
+            signed_url = s3_client.generate_presigned_url(
+                'get_object',
+                Params={
+                    'Bucket': bucket_name,
+                    'Key': s3_key
+                },
+                ExpiresIn=3600
+            )
+            
+            return Response({
+                'signed_url': signed_url,
+                'expires_in': 3600,
+                'original_key': s3_key
+            })
+            
+        except ClientError as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 '''from django.shortcuts import render
 from api.models import User
 from rest_framework.views import APIView

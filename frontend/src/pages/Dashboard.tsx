@@ -66,6 +66,26 @@ import {
           
           setIsLoading(true);
           
+          // Check if we have a direct thumbnail URL from upload
+          let directThumbnailUrl = location.state?.directThumbnailUrl || localStorage.getItem('last_s3_thumbnail_url');
+          const lastUploadedId = location.state?.lastUploadedVideoId || localStorage.getItem('last_uploaded_video_id');
+          
+          // If we have a direct thumbnail URL, get a signed version
+          if (directThumbnailUrl) {
+            const s3Key = getS3KeyFromUrl(directThumbnailUrl);
+            if (s3Key) {
+              const signedUrl = await getSignedUrl(s3Key);
+              if (signedUrl) {
+                directThumbnailUrl = signedUrl;
+                console.log('Using signed URL for direct thumbnail:', directThumbnailUrl);
+              }
+            }
+          }
+          
+          if (directThumbnailUrl && lastUploadedId) {
+            console.log(`Found direct S3 thumbnail URL for video ${lastUploadedId}:`, directThumbnailUrl);
+          }
+          
           // Log API endpoints we're using
           console.log('Fetching data from API endpoints:');
           console.log('- Videos endpoint: /api/videos/');
@@ -77,9 +97,22 @@ import {
           const videos = videosResponse.data;
           console.log('Videos data:', videos);
           
+          // Process videos to get signed URLs for all thumbnails
           if (videos && videos.length > 0) {
-            console.log('First video thumbnail URL:', videos[0].thumbnail_url);
-            console.log('First video URL:', videos[0].video_url);
+            for (const video of videos) {
+              if (video.thumbnail_url) {
+                const s3Key = getS3KeyFromUrl(video.thumbnail_url);
+                if (s3Key) {
+                  const signedUrl = await getSignedUrl(s3Key);
+                  if (signedUrl) {
+                    console.log(`Replacing thumbnail URL for video ${video.Video_id} with signed URL`);
+                    video.thumbnail_url = signedUrl;
+                  }
+                }
+              }
+            }
+            
+            console.log('First video thumbnail URL (after signing):', videos[0].thumbnail_url);
           }
           
           // Then get all analyses
@@ -93,8 +126,14 @@ import {
             const videoMap: Record<number, any> = {};
             videos.forEach((video: any) => {
               videoMap[video.Video_id] = video;
+              
+              // If we have a direct URL for this video, replace the thumbnail URL
+              if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && directThumbnailUrl) {
+                console.log(`Overriding thumbnail URL for video ${video.Video_id} with direct S3 URL`);
+                video.thumbnail_url = directThumbnailUrl;
+              }
             });
-            console.log('Video map:', videoMap);
+            console.log('Video map with potential overrides:', videoMap);
             
             // Map analyses to their corresponding videos
             const formattedAnalyses = analysisData.map((item: any) => {
@@ -141,6 +180,32 @@ import {
                 const matchedVideo = video || fallbackVideo;
                 console.log('Final matched video:', matchedVideo);
                 
+                // Direct S3 URL construction if we know the video ID but don't have a thumbnail
+                let thumbnailUrl = matchedVideo?.thumbnail_url || null;
+                if (videoId && !thumbnailUrl) {
+                  // Try both regular thumbnail and placeholder URLs
+                  const directThumbKey = `media/thumbnails/thumbnail_${videoId}.jpg`;
+                  const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+                  
+                  // First try the regular thumbnail
+                  let signedUrl = await getSignedUrl(directThumbKey);
+                  if (!signedUrl) {
+                    // If that fails, try the placeholder
+                    signedUrl = await getSignedUrl(placeholderKey);
+                  }
+                  
+                  if (signedUrl) {
+                    thumbnailUrl = signedUrl;
+                    console.log('Using signed URL for constructed path:', thumbnailUrl);
+                  }
+                  
+                  // If this is the last uploaded video and we have a stored URL, use that
+                  if (!signedUrl && lastUploadedId && videoId.toString() === lastUploadedId.toString() && directThumbnailUrl) {
+                    thumbnailUrl = directThumbnailUrl;
+                    console.log('Using stored direct S3 URL:', thumbnailUrl);
+                  }
+                }
+                
                 return {
                   id: item.id.toString(),
                   confidence: `${(resultData?.confidence || 0).toFixed(1)}%`,
@@ -149,7 +214,7 @@ import {
                   fps: matchedVideo ? `${matchedVideo.Frame_per_Second} fps` : "Unknown",
                   created_at: item.created_at,
                   result: resultData || { is_fake: false, confidence: 0 },
-                  thumbnail_url: matchedVideo ? matchedVideo.thumbnail_url : null,
+                  thumbnail_url: thumbnailUrl,
                   video_url: matchedVideo ? matchedVideo.video_url : null
                 };
               } catch (e) {
@@ -184,9 +249,14 @@ import {
                 // Try using a direct placeholder based on video ID
                 const videoId = firstAnalysis.result?.video_id;
                 if (videoId) {
-                  const placeholderUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/placeholder_${videoId}.jpg`;
-                  console.log('Trying placeholder URL:', placeholderUrl);
-                  setSelectedImage(placeholderUrl);
+                  const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+                  const signedUrl = await getSignedUrl(placeholderKey);
+                  if (signedUrl) {
+                    console.log('Using signed URL for placeholder:', signedUrl);
+                    setSelectedImage(signedUrl);
+                  } else {
+                    setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+                  }
                 } else {
                   setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
                 }
@@ -204,7 +274,7 @@ import {
       fetchAnalyses();
     }, [navigate, location.state]);
   
-    const handleResultClick = (id: string) => {
+    const handleResultClick = async (id: string) => {
       console.log('Clicked result:', id);
       const analysis = analyses.find(a => a.id === id);
       console.log('Found analysis:', analysis);
@@ -216,9 +286,14 @@ import {
         // Try using a direct placeholder based on video ID
         const videoId = analysis?.result?.video_id;
         if (videoId) {
-          const placeholderUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/placeholder_${videoId}.jpg`;
-          console.log('Trying placeholder URL:', placeholderUrl);
-          setSelectedImage(placeholderUrl);
+          const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+          const signedUrl = await getSignedUrl(placeholderKey);
+          if (signedUrl) {
+            console.log('Using signed URL for placeholder:', signedUrl);
+            setSelectedImage(signedUrl);
+          } else {
+            setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+          }
         } else {
           setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
         }
@@ -263,6 +338,69 @@ import {
       localStorage.removeItem('access');
       localStorage.removeItem('refresh');
       navigate('/login');
+    };
+  
+    // Function to get a signed URL for S3 objects
+    const getSignedUrl = async (s3Key: string): Promise<string | null> => {
+      try {
+        const response = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(s3Key)}`);
+        if (response.status === 200 && response.data && response.data.signed_url) {
+          console.log(`Got signed URL for ${s3Key}:`, response.data.signed_url);
+          return response.data.signed_url;
+        }
+        return null;
+      } catch (error) {
+        console.error('Error getting signed URL:', error);
+        return null;
+      }
+    };
+  
+    // Extract S3 key from URL
+    const getS3KeyFromUrl = (url: string): string | null => {
+      if (!url) return null;
+      
+      // For URLs like https://true-vision.s3.us-west-2.amazonaws.com/media/thumbnails/placeholder_1.jpg
+      if (url.includes('amazonaws.com')) {
+        const parts = url.split('amazonaws.com/');
+        if (parts.length > 1) {
+          return parts[1];
+        }
+      }
+      
+      // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
+      if (url.startsWith('media/')) {
+        return url;
+      }
+      
+      // For Django media URLs like /media/thumbnails/placeholder_1.jpg
+      if (url.startsWith('/media/')) {
+        return url.substring(1); // Remove leading slash
+      }
+      
+      return null;
+    };
+  
+    // Load an image with a signed URL
+    const loadImageWithSignedUrl = async (imageUrl: string): Promise<string> => {
+      // If it's not an S3 URL, return as is
+      if (!imageUrl.includes('amazonaws') && !imageUrl.includes('/media/')) {
+        return imageUrl;
+      }
+      
+      const s3Key = getS3KeyFromUrl(imageUrl);
+      if (!s3Key) {
+        console.warn('Could not extract S3 key from URL:', imageUrl);
+        return imageUrl;
+      }
+      
+      console.log('Extracting S3 key:', s3Key);
+      const signedUrl = await getSignedUrl(s3Key);
+      if (!signedUrl) {
+        console.warn('Could not get signed URL for:', s3Key);
+        return imageUrl;
+      }
+      
+      return signedUrl;
     };
   
     return (
@@ -394,7 +532,7 @@ import {
                         src={selectedImage}
                         alt="Result preview"
                         className="w-full h-full object-contain"
-                        onError={(e) => {
+                        onError={async (e) => {
                           console.error('Error loading image:', selectedImage);
                           
                           // Try to see if we need to fix a broken URL
@@ -402,9 +540,19 @@ import {
                           
                           // Check if it's a relative URL missing the domain
                           if (selectedImage && selectedImage.startsWith('/media/')) {
-                            // Try to convert to S3 URL
-                            fixedUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/${selectedImage.split('/').pop()}`;
-                            console.log('Attempting to fix URL:', fixedUrl);
+                            // Try to get a signed URL
+                            const s3Key = getS3KeyFromUrl(selectedImage);
+                            if (s3Key) {
+                              const signedUrl = await getSignedUrl(s3Key);
+                              if (signedUrl) {
+                                fixedUrl = signedUrl;
+                                console.log('Got signed URL for relative path:', fixedUrl);
+                              } else {
+                                // Try to convert to S3 URL
+                                fixedUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/${selectedImage.split('/').pop()}`;
+                                console.log('Attempting to fix URL:', fixedUrl);
+                              }
+                            }
                           }
                           
                           // Check if it's an S3 URL but missing the thumbnails folder

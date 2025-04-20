@@ -1,9 +1,6 @@
-
-
-
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet
+from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView
 
 router = DefaultRouter()
 router.register(r'analysis', AnalysisViewSet, basename='analysis')
@@ -18,6 +15,9 @@ urlpatterns = [
     # S3 testing routes
     path('test/s3/', S3TestView.as_view(), name='test_s3_connection'),
     path('test/upload/', VideoUploadTestView.as_view(), name='test_video_upload'),
+    
+    # S3 signed URL
+    path('s3/signed-url/', S3SignedURLView.as_view(), name='s3_signed_url'),
 ]
 
 
