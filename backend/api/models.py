@@ -17,26 +17,46 @@ from PIL import ImageDraw
 # Add this function to get the ffmpeg executable path
 def get_ffmpeg_path():
     """Get the path to the ffmpeg executable based on the project structure."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ffmpeg_bin = os.path.join(base_dir, 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg.exe')
+    # Check multiple possible locations for ffmpeg
+    possible_paths = [
+        # Local development paths
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg.exe'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg'),
+        # Heroku paths
+        '/app/vendor/ffmpeg/ffmpeg',
+        '/usr/bin/ffmpeg'
+    ]
     
-    # Check if the path exists
-    if os.path.exists(ffmpeg_bin):
-        return ffmpeg_bin
+    # Check if any of the paths exist
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"Found ffmpeg at: {path}")
+            return path
     
     # Fallback to system PATH
+    print("Using ffmpeg from system PATH")
     return 'ffmpeg'
 
 def get_ffprobe_path():
     """Get the path to the ffprobe executable based on the project structure."""
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    ffprobe_bin = os.path.join(base_dir, 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe.exe')
+    # Check multiple possible locations for ffprobe
+    possible_paths = [
+        # Local development paths
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe.exe'),
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe'),
+        # Heroku paths
+        '/app/vendor/ffmpeg/ffprobe',
+        '/usr/bin/ffprobe'
+    ]
     
-    # Check if the path exists
-    if os.path.exists(ffprobe_bin):
-        return ffprobe_bin
+    # Check if any of the paths exist
+    for path in possible_paths:
+        if os.path.exists(path):
+            print(f"Found ffprobe at: {path}")
+            return path
     
     # Fallback to system PATH
+    print("Using ffprobe from system PATH")
     return 'ffprobe'
 
 class S3MediaStorage(S3Boto3Storage):

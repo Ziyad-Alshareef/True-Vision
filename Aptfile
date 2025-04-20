@@ -4,3 +4,4 @@ libfreetype6-dev
 zlib1g-dev
 libimagequant-dev
 libxcb1-dev 
+ffmpeg 
