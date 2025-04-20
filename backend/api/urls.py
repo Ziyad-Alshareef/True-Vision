@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView, S3ImageProxyView
+from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView, S3ImageProxyView, S3ObjectExistsView
 
 router = DefaultRouter()
 router.register(r'analysis', AnalysisViewSet, basename='analysis')
@@ -16,10 +16,11 @@ urlpatterns = [
     path('test/s3/', S3TestView.as_view(), name='test_s3_connection'),
     path('test/upload/', VideoUploadTestView.as_view(), name='test_video_upload'),
     
-    # S3 signed URL
+    # S3 utilities
     path('s3/signed-url/', S3SignedURLView.as_view(), name='s3_signed_url'),
+    path('s3/object-exists/', S3ObjectExistsView.as_view(), name='s3_object_exists'),
     
-    # New image proxy endpoint
+    # Image proxy
     path('proxy-image/', S3ImageProxyView.as_view(), name='proxy_image'),
 ]
 

@@ -402,14 +402,26 @@ class S3ImageProxyView(APIView):
                            status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Extract S3 key from URL if it's an S3 URL
+            # Extract key and video ID if this is an S3 URL
+            key = None
+            video_id = None
+            
             if 'amazonaws.com' in url:
                 # Parse S3 URL to get key
                 parts = url.split('amazonaws.com/')
                 if len(parts) > 1:
                     key = parts[1].split('?')[0]  # Remove query params
                     
-                    # Get a fresh signed URL
+                    # Try to extract video ID from the key
+                    match = key.lower().split('/')[-1].split('_')
+                    if len(match) > 1 and match[1].isdigit():
+                        video_id = match[1].split('.')[0]  # Remove file extension
+            
+            # Get a signed URL for the requested resource
+            signed_url = None
+            if key:
+                try:
+                    # Create S3 client
                     s3_client = boto3.client(
                         's3',
                         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
@@ -417,28 +429,69 @@ class S3ImageProxyView(APIView):
                         region_name=settings.AWS_S3_REGION_NAME
                     )
                     
-                    # Generate signed URL
-                    signed_url = s3_client.generate_presigned_url(
-                        'get_object',
-                        Params={
-                            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
-                            'Key': key
-                        },
-                        ExpiresIn=300  # URL valid for 5 minutes
-                    )
-                    
-                    # Use the fresh signed URL
-                    url = signed_url
+                    # Check if the object exists
+                    try:
+                        s3_client.head_object(
+                            Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                            Key=key
+                        )
+                        # Object exists, generate signed URL
+                        signed_url = s3_client.generate_presigned_url(
+                            'get_object',
+                            Params={
+                                'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                                'Key': key
+                            },
+                            ExpiresIn=300  # URL valid for 5 minutes
+                        )
+                    except ClientError as e:
+                        # Object doesn't exist, try fallbacks if we have a video ID
+                        if video_id:
+                            # Try different possible thumbnail/placeholder keys
+                            fallback_keys = [
+                                f"media/thumbnails/placeholder_{video_id}.jpg",
+                                f"media/thumbnails/thumbnail_{video_id}.jpg",
+                                f"media/thumbnails/video_{video_id}.jpg",
+                                f"media/videos/thumbnail_{video_id}.jpg"
+                            ]
+                            
+                            for fallback_key in fallback_keys:
+                                try:
+                                    # Check if this fallback exists
+                                    s3_client.head_object(
+                                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                                        Key=fallback_key
+                                    )
+                                    # Found a working fallback
+                                    signed_url = s3_client.generate_presigned_url(
+                                        'get_object',
+                                        Params={
+                                            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                                            'Key': fallback_key
+                                        },
+                                        ExpiresIn=300
+                                    )
+                                    break
+                                except ClientError:
+                                    continue
+                        
+                        if not signed_url:
+                            # If still no valid URL, return generic placeholder
+                            return self.serve_placeholder_image()
+                except Exception as s3_error:
+                    print(f"S3 client error: {str(s3_error)}")
+                    return self.serve_placeholder_image()
+            
+            # Use the original URL if no signed URL was generated
+            url_to_fetch = signed_url if signed_url else url
             
             # Make request to the URL
-            response = requests.get(url, stream=True)
+            response = requests.get(url_to_fetch, stream=True)
             
             # Check if request was successful
             if response.status_code != 200:
-                return Response(
-                    {'error': f'Failed to fetch image: HTTP {response.status_code}'},
-                    status=status.HTTP_502_BAD_GATEWAY
-                )
+                # If not successful, serve placeholder
+                return self.serve_placeholder_image()
             
             # Determine content type
             content_type = response.headers.get('Content-Type')
@@ -464,10 +517,124 @@ class S3ImageProxyView(APIView):
             return django_response
             
         except Exception as e:
+            print(f"Proxy error: {str(e)}")
+            return self.serve_placeholder_image()
+    
+    def serve_placeholder_image(self):
+        """Serve a generic placeholder image"""
+        try:
+            # Try to fetch a placeholder from a public URL
+            placeholder_url = "https://placehold.co/600x400?text=No+Image+Found"
+            response = requests.get(placeholder_url, stream=True)
+            
+            if response.status_code == 200:
+                django_response = HttpResponse(
+                    response.iter_content(chunk_size=1024),
+                    content_type=response.headers.get('Content-Type', 'image/png')
+                )
+                
+                # Set Content-Length if available
+                if 'Content-Length' in response.headers:
+                    django_response['Content-Length'] = response.headers['Content-Length']
+                
+                django_response['Cache-Control'] = 'max-age=86400'
+                return django_response
+            
+            # If that fails, create a simple text response
             return Response(
-                {'error': f'Error proxying image: {str(e)}'},
+                {"error": "Image not found and placeholder failed"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as placeholder_error:
+            return Response(
+                {"error": f"Failed to serve placeholder: {str(placeholder_error)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class S3ObjectExistsView(APIView):
+    """Check if an S3 object exists without downloading it"""
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        """Check if the specified S3 key exists"""
+        key = request.GET.get('key')
+        if not key:
+            return Response({'error': 'Key parameter is required'}, 
+                           status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Create S3 client
+            s3_client = boto3.client(
+                's3',
+                aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                region_name=settings.AWS_S3_REGION_NAME
+            )
+            
+            # Check if the object exists
+            exists = True
+            alternate_key = None
+            
+            try:
+                s3_client.head_object(
+                    Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                    Key=key
+                )
+            except ClientError:
+                exists = False
+                
+                # Check if this is a thumbnail/placeholder and try to find alternatives
+                if '/thumbnails/' in key:
+                    # Try to extract video ID
+                    filename = key.split('/')[-1]
+                    match = filename.split('_')
+                    if len(match) > 1 and match[1].isdigit():
+                        video_id = match[1].split('.')[0]
+                        
+                        # Check for alternates
+                        alternates = [
+                            f"media/thumbnails/placeholder_{video_id}.jpg",
+                            f"media/thumbnails/thumbnail_{video_id}.jpg",
+                            f"media/thumbnails/video_{video_id}.jpg"
+                        ]
+                        
+                        for alt_key in alternates:
+                            if alt_key != key:  # Skip the original key
+                                try:
+                                    s3_client.head_object(
+                                        Bucket=settings.AWS_STORAGE_BUCKET_NAME,
+                                        Key=alt_key
+                                    )
+                                    # Found an alternate
+                                    alternate_key = alt_key
+                                    break
+                                except ClientError:
+                                    continue
+            
+            # Generate a signed URL if requested and the object exists
+            signed_url = None
+            if exists or alternate_key:
+                final_key = alternate_key if alternate_key else key
+                signed_url = s3_client.generate_presigned_url(
+                    'get_object',
+                    Params={
+                        'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                        'Key': final_key
+                    },
+                    ExpiresIn=300  # URL valid for 5 minutes
+                )
+            
+            return Response({
+                'exists': exists,
+                'key': key,
+                'alternate_key': alternate_key,
+                'signed_url': signed_url
+            })
+            
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 '''from django.shortcuts import render
 from api.models import User
