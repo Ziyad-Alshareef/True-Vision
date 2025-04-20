@@ -93,8 +93,25 @@ export const Detection = () => {
       // Check response and handle success
       if (response.status === 201) {
         console.log('Upload successful:', response.data);
-        // Pass a refresh flag in the state
-        navigate('/dashboard', { state: { refresh: true } });
+        
+        // Store the video ID in localStorage so we can highlight it in the dashboard
+        if (response.data && response.data.video_id) {
+          localStorage.setItem('last_uploaded_video_id', response.data.video_id.toString());
+          console.log('Stored video ID for highlighting:', response.data.video_id);
+        }
+        
+        // Log the thumbnail URL if available
+        if (response.data && response.data.thumbnail_path) {
+          console.log('Thumbnail path in response:', response.data.thumbnail_path);
+        }
+        
+        // Pass a refresh flag and the video ID in the state
+        navigate('/dashboard', { 
+          state: { 
+            refresh: true,
+            lastUploadedVideoId: response.data?.video_id
+          }
+        });
       }
     } catch (error) {
       console.error('Upload error:', error);

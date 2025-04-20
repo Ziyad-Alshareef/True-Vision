@@ -217,7 +217,13 @@ class VideoUploadTestView(APIView):
                 'analysis_id': analysis.id,
                 'video_id': video.Video_id,
                 'video_path': video.Video_Path,
-                'thumbnail_path': video.Thumbnail.url if video.Thumbnail else None
+                'thumbnail_path': video.Thumbnail.url if video.Thumbnail else None,
+                'video_details': {
+                    'resolution': video.Resolution,
+                    'duration': video.Length,
+                    'fps': video.Frame_per_Second,
+                    'size': video.size
+                }
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:

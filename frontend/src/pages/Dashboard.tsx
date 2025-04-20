@@ -66,40 +66,123 @@ import {
           
           setIsLoading(true);
           
+          // Log API endpoints we're using
+          console.log('Fetching data from API endpoints:');
+          console.log('- Videos endpoint: /api/videos/');
+          console.log('- Analysis endpoint: /api/analysis/');
+          
           // First get all video details
           const videosResponse = await api.get('/api/videos/');
+          console.log('Raw videos response:', videosResponse);
           const videos = videosResponse.data;
+          console.log('Videos data:', videos);
+          
+          if (videos && videos.length > 0) {
+            console.log('First video thumbnail URL:', videos[0].thumbnail_url);
+            console.log('First video URL:', videos[0].video_url);
+          }
           
           // Then get all analyses
           const analysisResponse = await api.get('/api/analysis/');
+          console.log('Raw analysis response:', analysisResponse);
           const analysisData = analysisResponse.data;
+          console.log('Analysis data sample:', analysisData.length > 0 ? analysisData[0] : 'No analyses found');
           
           if (videosResponse.status === 200 && analysisResponse.status === 200) {
+            // Map videos by ID for easier lookup
+            const videoMap: Record<number, any> = {};
+            videos.forEach((video: any) => {
+              videoMap[video.Video_id] = video;
+            });
+            console.log('Video map:', videoMap);
+            
             // Map analyses to their corresponding videos
             const formattedAnalyses = analysisData.map((item: any) => {
-              // Find the corresponding video by id if referenced in the analysis
-              const videoId = item.result_data?.video_id;
-              const video = videoId ? videos.find((v: any) => v.Video_id === videoId) : null;
-              
-              return {
-                id: item.id.toString(),
-                confidence: `${(item.result_data?.confidence || 0).toFixed(1)}%`,
-                duration: video ? `${Math.floor(video.Length / 60)}:${(video.Length % 60).toString().padStart(2, '0')}` : "00:00",
-                resolution: video ? video.Resolution : "Unknown",
-                fps: video ? `${video.Frame_per_Second} fps` : "Unknown",
-                created_at: item.created_at,
-                result: item.result_data || { is_fake: false, confidence: 0 },
-                thumbnail_url: video ? video.thumbnail_url : null,
-                video_url: video ? video.video_url : null
-              };
+              try {
+                console.log('Processing analysis item:', item);
+                
+                // Parse result_data if it's a string
+                let resultData;
+                try {
+                  resultData = typeof item.result_data === 'string' 
+                    ? JSON.parse(item.result_data) 
+                    : item.result_data;
+                } catch (e) {
+                  console.error('Error parsing result_data:', e);
+                  resultData = { is_fake: false, confidence: 0 };
+                }
+                console.log('Parsed result data:', resultData);
+                
+                // Find video ID either from the result_data or from the video URL if available
+                let videoId = null;
+                if (resultData && resultData.video_id) {
+                  videoId = resultData.video_id;
+                  console.log(`Found video_id ${videoId} in result_data`);
+                } else if (item.video) {
+                  // Try to extract video ID from the video URL if present
+                  const videoUrlMatch = item.video.match(/\/(\d+)\/$/);
+                  if (videoUrlMatch && videoUrlMatch[1]) {
+                    videoId = parseInt(videoUrlMatch[1]);
+                    console.log(`Extracted video_id ${videoId} from video URL`);
+                  }
+                }
+                
+                // Get the video by ID
+                const video = videoId ? videoMap[videoId] : null;
+                console.log(`Video lookup for ID ${videoId}:`, video ? 'Found' : 'Not found');
+                
+                // If video not found through ID mapping, try to find by comparing URLs
+                let fallbackVideo = null;
+                if (!video && item.video) {
+                  fallbackVideo = videos.find((v: any) => v.video_url === item.video);
+                  console.log('Fallback video search by URL:', fallbackVideo ? 'Found' : 'Not found');
+                }
+                
+                const matchedVideo = video || fallbackVideo;
+                console.log('Final matched video:', matchedVideo);
+                
+                return {
+                  id: item.id.toString(),
+                  confidence: `${(resultData?.confidence || 0).toFixed(1)}%`,
+                  duration: matchedVideo ? `${Math.floor(matchedVideo.Length / 60)}:${(matchedVideo.Length % 60).toString().padStart(2, '0')}` : "00:00",
+                  resolution: matchedVideo ? matchedVideo.Resolution : "Unknown",
+                  fps: matchedVideo ? `${matchedVideo.Frame_per_Second} fps` : "Unknown",
+                  created_at: item.created_at,
+                  result: resultData || { is_fake: false, confidence: 0 },
+                  thumbnail_url: matchedVideo ? matchedVideo.thumbnail_url : null,
+                  video_url: matchedVideo ? matchedVideo.video_url : null
+                };
+              } catch (e) {
+                console.error('Error processing analysis item:', e);
+                return {
+                  id: item.id?.toString() || 'unknown',
+                  confidence: '0%',
+                  duration: '00:00',
+                  resolution: 'Unknown',
+                  fps: 'Unknown',
+                  created_at: item.created_at || new Date().toISOString(),
+                  result: { is_fake: false, confidence: 0 },
+                  thumbnail_url: null,
+                  video_url: null
+                };
+              }
             });
             
+            console.log('Final formatted analyses:', formattedAnalyses);
             setAnalyses(formattedAnalyses);
             
             // Select the first result if available
             if (formattedAnalyses.length > 0) {
-              setSelectedResult(formattedAnalyses[0].id);
-              setSelectedImage(formattedAnalyses[0].thumbnail_url || null);
+              const firstAnalysis = formattedAnalyses[0];
+              setSelectedResult(firstAnalysis.id);
+              
+              if (firstAnalysis.thumbnail_url) {
+                console.log('Setting thumbnail URL:', firstAnalysis.thumbnail_url);
+                setSelectedImage(firstAnalysis.thumbnail_url);
+              } else {
+                console.log('No thumbnail URL available for first analysis');
+                setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+              }
             }
           }
         } catch (error) {
@@ -114,8 +197,10 @@ import {
     }, [navigate, location.state]);
   
     const handleResultClick = (id: string) => {
-      setSelectedResult(id);
+      console.log('Clicked result:', id);
       const analysis = analyses.find(a => a.id === id);
+      console.log('Found analysis:', analysis);
+      setSelectedResult(id);
       setSelectedImage(analysis?.thumbnail_url || null);
       setShowDetection(false);
     };
@@ -279,14 +364,24 @@ import {
             <div className="max-w-6xl mx-auto">
               <h1 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-6`}>Result details</h1>
               
-              {selectedResult && selectedImage ? (
+              {selectedResult ? (
                 <div className="space-y-6">
                   <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                    <img
-                      src={selectedImage}
-                      alt="Result preview"
-                      className="w-full h-full object-contain"
-                    />
+                    {selectedImage ? (
+                      <img
+                        src={selectedImage}
+                        alt="Result preview"
+                        className="w-full h-full object-contain"
+                        onError={(e) => {
+                          console.error('Error loading image:', selectedImage);
+                          e.currentTarget.src = 'https://placehold.co/600x400?text=No+Thumbnail';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <p className="text-gray-500">No thumbnail available</p>
+                      </div>
+                    )}
                   </div>
                   
                   <div className={`${isDarkMode ? 'bg-[#333333]' : 'bg-white'} rounded-lg p-4 shadow-sm`}>
@@ -299,21 +394,19 @@ import {
                         </tr>
                       </thead>
                       <tbody>
-                        {selectedResult && (
-                          <tr>
-                            <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
-                              {analyses.find(item => item.id === selectedResult)?.result.is_fake ? 'FAKE' : 'REAL'}
-                            </td>
-                            <td className="p-2 text-red-500">
-                              {analyses.find(item => item.id === selectedResult)?.confidence}
-                            </td>
-                            <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
-                              <div>Duration: {analyses.find(item => item.id === selectedResult)?.duration}</div>
-                              <div>Resolution: {analyses.find(item => item.id === selectedResult)?.resolution}</div>
-                              <div>Frame Rate: {analyses.find(item => item.id === selectedResult)?.fps}</div>
-                            </td>
-                          </tr>
-                        )}
+                        <tr>
+                          <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
+                            {analyses.find(item => item.id === selectedResult)?.result?.is_fake ? 'FAKE' : 'REAL'}
+                          </td>
+                          <td className="p-2 text-red-500">
+                            {analyses.find(item => item.id === selectedResult)?.confidence}
+                          </td>
+                          <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
+                            <div>Duration: {analyses.find(item => item.id === selectedResult)?.duration}</div>
+                            <div>Resolution: {analyses.find(item => item.id === selectedResult)?.resolution}</div>
+                            <div>Frame Rate: {analyses.find(item => item.id === selectedResult)?.fps}</div>
+                          </td>
+                        </tr>
                       </tbody>
                     </table>
                   </div>
