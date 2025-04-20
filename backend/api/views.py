@@ -244,6 +244,18 @@ class VideoUploadTestView(APIView):
         }
         
         try:
+            # First check if FFprobe is installed
+            try:
+                subprocess.run(['ffprobe', '-version'], capture_output=True, check=True)
+            except (subprocess.SubprocessError, FileNotFoundError):
+                print("Error in metadata extraction: FFprobe not installed or not in PATH")
+                # Return default values
+                return {
+                    'duration': 10,
+                    'resolution': '640x480',
+                    'fps': 30
+                }
+            
             # Create a temporary file for FFprobe to analyze
             with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_file.name)[1], delete=False) as temp_file:
                 # Save the uploaded file to the temporary file
@@ -286,6 +298,14 @@ class VideoUploadTestView(APIView):
                             metadata['fps'] = int(float(num) / float(den))
                         else:
                             metadata['fps'] = int(float(frame_rate))
+            except FileNotFoundError:
+                print("Error: FFprobe binary not found")
+                # Use some default values
+                metadata = {
+                    'duration': 10,
+                    'resolution': '640x480',
+                    'fps': 30
+                }
             except (subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as e:
                 print(f"Error extracting metadata: {e}")
                 # Use some default values
@@ -296,7 +316,10 @@ class VideoUploadTestView(APIView):
                 }
             
             # Clean up temporary file
-            os.unlink(temp_file_path)
+            try:
+                os.unlink(temp_file_path)
+            except Exception as clean_error:
+                print(f"Error cleaning up temp file: {clean_error}")
             
             # Reset file pointer for further processing
             video_file.seek(0)

@@ -96,6 +96,13 @@ class Video(models.Model):
         """Generate a thumbnail from the video"""
         print(f"Starting simplified thumbnail generation for video ID {self.Video_id}")
         try:
+            # Check if FFmpeg is installed first
+            try:
+                subprocess.run(['ffmpeg', '-version'], check=True, capture_output=True)
+            except (subprocess.SubprocessError, FileNotFoundError):
+                print("ERROR: FFmpeg is not installed or not in PATH")
+                return False
+
             # Create a temporary file
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_thumb:
                 temp_thumb_path = temp_thumb.name
@@ -134,7 +141,26 @@ class Video(models.Model):
                 temp_thumb_path
             ]
             print(f"Running FFmpeg command: {' '.join(cmd)}")
-            subprocess.run(cmd, check=True, capture_output=True, text=True)
+            
+            try:
+                subprocess.run(cmd, check=True, capture_output=True, text=True)
+            except FileNotFoundError:
+                print("ERROR: FFmpeg binary not found. Please install FFmpeg.")
+                # If on Heroku, create a black image as a fallback
+                try:
+                    print("Attempting to create placeholder image instead")
+                    img = Image.new('RGB', (640, 360), color='black')
+                    draw = ImageDraw.Draw(img)
+                    draw.text((320, 180), f"Video {self.Video_id}", fill=(255, 255, 255))
+                    img.save(temp_thumb_path)
+                    print("Created placeholder black image")
+                except Exception as img_err:
+                    print(f"Error creating placeholder: {str(img_err)}")
+                    return False
+            except subprocess.CalledProcessError as e:
+                print(f"FFmpeg command failed: {e}")
+                print(f"FFmpeg stderr: {e.stderr}")
+                return False
             
             # Check if the file was created successfully
             if os.path.exists(temp_thumb_path) and os.path.getsize(temp_thumb_path) > 100:
@@ -182,8 +208,23 @@ class Video(models.Model):
                 raise Exception("Failed to generate thumbnail")
                 
         except Exception as e:
-            print(f"Error in thumbnail generation process: {e}")
-            raise  # Re-raise the exception to notify calling code
+            print(f"Error in thumbnail generation process: {str(e)}")
+            # Create a placeholder thumbnail if we couldn't generate one
+            try:
+                print("Creating fallback placeholder")
+                img = Image.new('RGB', (640, 360), color=(9, 127, 77))  # Green placeholder with True Vision branding color
+                draw = ImageDraw.Draw(img)
+                draw.text((320, 180), f"Video {self.Video_id}", fill=(255, 255, 255))
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG', quality=95)
+                buffer.seek(0)
+                file_name = f"placeholder_{self.Video_id}.jpg"
+                self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
+                print(f"Created and saved placeholder thumbnail as {file_name}")
+                return True
+            except Exception as placeholder_err:
+                print(f"Error creating placeholder: {str(placeholder_err)}")
+                return False
 
 class Detection(models.Model):
     """Detection results from video analysis"""
