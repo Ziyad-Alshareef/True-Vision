@@ -11,6 +11,8 @@ import tempfile
 from django.core.files.base import ContentFile
 from PIL import Image
 import io
+from PIL import ImageEnhance
+from PIL import ImageDraw
 
 class S3MediaStorage(S3Boto3Storage):
     """Custom S3 storage for media files"""
@@ -108,15 +110,52 @@ class Video(models.Model):
                 temp_video_path = self.Video_File.path
             
             # Use ffmpeg to extract a frame from the middle of the video
-            cmd = [
-                'ffmpeg',
-                '-i', temp_video_path,
-                '-ss', '00:00:05',  # 5 seconds into the video
-                '-vframes', '1',
-                '-f', 'image2',
-                temp_thumb_path
-            ]
-            subprocess.run(cmd, check=True, capture_output=True)
+            # Try different timestamps to avoid black frames
+            timestamps = ['00:00:01', '00:00:03', '00:00:05', '00:00:10']
+            success = False
+            
+            for timestamp in timestamps:
+                try:
+                    # Try this timestamp
+                    cmd = [
+                        'ffmpeg',
+                        '-i', temp_video_path,
+                        '-ss', timestamp,  # timestamp into the video
+                        '-vframes', '1',
+                        '-q:v', '2',  # Higher quality setting
+                        '-f', 'image2',
+                        temp_thumb_path
+                    ]
+                    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+                    
+                    # Check if the file was created and has content
+                    if os.path.exists(temp_thumb_path) and os.path.getsize(temp_thumb_path) > 100:
+                        # Check if the image is not just black
+                        img = Image.open(temp_thumb_path)
+                        extrema = img.convert("L").getextrema()
+                        # If min and max are too similar, the image is likely just one color (black)
+                        if extrema[1] - extrema[0] > 30:
+                            success = True
+                            print(f"Generated valid thumbnail at timestamp {timestamp}")
+                            break
+                        else:
+                            print(f"Thumbnail at {timestamp} is too dark/uniform, trying next timestamp...")
+                except subprocess.CalledProcessError as e:
+                    print(f"Error generating thumbnail at {timestamp}: {e}")
+                    print(f"FFMPEG stderr: {e.stderr}")
+                    continue
+            
+            if not success:
+                print("All thumbnail attempts failed, using simpler approach")
+                # Fallback to a simpler approach
+                cmd = [
+                    'ffmpeg',
+                    '-i', temp_video_path,
+                    '-vf', 'thumbnail,scale=480:320',  # Use thumbnail filter
+                    '-frames:v', '1',
+                    temp_thumb_path
+                ]
+                subprocess.run(cmd, check=True, capture_output=True)
             
             # Open the generated thumbnail
             with open(temp_thumb_path, 'rb') as f:
@@ -127,9 +166,21 @@ class Video(models.Model):
             # Keep aspect ratio but limit to 480px max dimension
             img.thumbnail((480, 480))
             
+            
+            # Ensure image is RGB (in case it's grayscale/RGBA)
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            
+            # Increase brightness and contrast slightly if the image is dark
+            enhancer = ImageEnhance.Brightness(img)
+            img = enhancer.enhance(1.2)  # Increase brightness by 20%
+            
+            enhancer = ImageEnhance.Contrast(img)
+            img = enhancer.enhance(1.2)  # Increase contrast by 20%
+            
             # Save to in-memory buffer
             buffer = io.BytesIO()
-            img.save(buffer, format='JPEG')
+            img.save(buffer, format='JPEG', quality=95)
             buffer.seek(0)
             
             # Set the thumbnail field
@@ -143,6 +194,23 @@ class Video(models.Model):
                 
         except Exception as e:
             print(f"Error generating thumbnail: {e}")
+            # If all else fails, create a colored placeholder
+            try:
+                # Create a colored placeholder image
+                img = Image.new('RGB', (480, 320), color=(32, 127, 77))  # Green color
+                draw = ImageDraw.Draw(img)
+                draw.text((240, 160), "True Vision", fill=(255, 255, 255), anchor="mm")
+                
+                # Save to buffer
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG')
+                buffer.seek(0)
+                
+                # Save placeholder as thumbnail
+                file_name = f"placeholder_{self.Video_id}.jpg"
+                self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
+            except Exception as e2:
+                print(f"Even placeholder creation failed: {e2}")
 
 class Detection(models.Model):
     """Detection results from video analysis"""

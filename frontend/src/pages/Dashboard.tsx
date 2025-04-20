@@ -376,6 +376,45 @@ import {
                           console.error('Error loading image:', selectedImage);
                           e.currentTarget.src = 'https://placehold.co/600x400?text=No+Thumbnail';
                         }}
+                        onLoad={(e) => {
+                          // Check if the image might be completely black
+                          try {
+                            const img = e.currentTarget;
+                            
+                            // Create a canvas to analyze the image
+                            const canvas = document.createElement('canvas');
+                            canvas.width = Math.min(img.naturalWidth, 50); // Analyze a small version
+                            canvas.height = Math.min(img.naturalHeight, 50);
+                            
+                            const ctx = canvas.getContext('2d');
+                            if (ctx) {
+                              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                              
+                              // Get image data
+                              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                              const data = imageData.data;
+                              
+                              // Check if the image is mostly black
+                              let totalBrightness = 0;
+                              for (let i = 0; i < data.length; i += 4) {
+                                // Calculate brightness (simple average)
+                                const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
+                                totalBrightness += brightness;
+                              }
+                              
+                              const avgBrightness = totalBrightness / (data.length / 4);
+                              console.log('Average brightness:', avgBrightness);
+                              
+                              // If avg brightness is too low, replace with placeholder
+                              if (avgBrightness < 20) {
+                                console.log('Thumbnail appears to be too dark, replacing with placeholder');
+                                img.src = 'https://placehold.co/600x400?text=No+Visible+Thumbnail';
+                              }
+                            }
+                          } catch (err) {
+                            console.error('Error analyzing image:', err);
+                          }
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center">
