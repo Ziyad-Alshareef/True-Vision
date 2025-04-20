@@ -94,40 +94,68 @@ export const Detection = () => {
       if (response.status === 201) {
         console.log('Upload successful:', response.data);
         
-        // Store the video ID in localStorage so we can highlight it in the dashboard
+        // Store the video ID and other details
         if (response.data && response.data.video_id) {
-          localStorage.setItem('last_uploaded_video_id', response.data.video_id.toString());
-          console.log('Stored video ID for highlighting:', response.data.video_id);
+          const videoId = response.data.video_id;
+          localStorage.setItem('last_uploaded_video_id', videoId.toString());
+          console.log('Stored video ID for highlighting:', videoId);
           
-          // Store the direct S3 placeholder URL based on video ID
-          const placeholderUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/placeholder_${response.data.video_id}.jpg`;
-          localStorage.setItem('last_thumbnail_url', placeholderUrl);
-          console.log('Stored direct S3 placeholder URL:', placeholderUrl);
+          // Get a signed URL for the thumbnail
+          try {
+            // Try getting a signed URL for the regular thumbnail
+            const thumbnailKey = `media/thumbnails/thumbnail_${videoId}.jpg`;
+            const signedUrlResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(thumbnailKey)}`);
+            
+            if (signedUrlResponse.status === 200 && signedUrlResponse.data.signed_url) {
+              localStorage.setItem('last_signed_thumbnail_url', signedUrlResponse.data.signed_url);
+              console.log('Got signed URL for thumbnail:', signedUrlResponse.data.signed_url);
+            } else {
+              // If regular thumbnail failed, try the placeholder
+              const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+              const placeholderUrlResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(placeholderKey)}`);
+              
+              if (placeholderUrlResponse.status === 200 && placeholderUrlResponse.data.signed_url) {
+                localStorage.setItem('last_signed_thumbnail_url', placeholderUrlResponse.data.signed_url);
+                console.log('Got signed URL for placeholder:', placeholderUrlResponse.data.signed_url);
+              }
+            }
+          } catch (error) {
+            console.error('Error getting signed URL:', error);
+          }
         }
         
-        // Log the thumbnail URL if available
+        // Log the thumbnail path from the API response
         if (response.data && response.data.thumbnail_path) {
           console.log('Thumbnail path in response:', response.data.thumbnail_path);
           localStorage.setItem('last_api_thumbnail_url', response.data.thumbnail_path);
           
-          // Also try to extract and store the S3 URL directly if it's not a direct URL
-          if (response.data.thumbnail_path && !response.data.thumbnail_path.startsWith('http')) {
-            // It's likely a relative path, convert to S3 URL
-            const filename = response.data.thumbnail_path.split('/').pop();
-            const s3Url = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/${filename}`;
-            localStorage.setItem('last_s3_thumbnail_url', s3Url);
-            console.log('Converted to S3 URL:', s3Url);
-          } else if (response.data.thumbnail_path) {
-            localStorage.setItem('last_s3_thumbnail_url', response.data.thumbnail_path);
+          // Try to get a signed URL for this path
+          try {
+            let s3Key = response.data.thumbnail_path;
+            
+            // Convert relative path to S3 key if needed
+            if (s3Key.startsWith('/')) {
+              s3Key = s3Key.substring(1); // Remove leading slash
+            }
+            
+            // Get signed URL from backend
+            const signedUrlResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(s3Key)}`);
+            if (signedUrlResponse.status === 200 && signedUrlResponse.data.signed_url) {
+              localStorage.setItem('last_api_signed_url', signedUrlResponse.data.signed_url);
+              console.log('Got signed URL for API path:', signedUrlResponse.data.signed_url);
+            }
+          } catch (error) {
+            console.error('Error getting signed URL for API path:', error);
           }
         }
         
-        // Pass a refresh flag and the video ID in the state
+        // Pass data to dashboard
         navigate('/dashboard', { 
           state: { 
             refresh: true,
             lastUploadedVideoId: response.data?.video_id,
-            directThumbnailUrl: localStorage.getItem('last_s3_thumbnail_url')
+            signedThumbnailUrl: localStorage.getItem('last_signed_thumbnail_url') || 
+                               localStorage.getItem('last_api_signed_url')
           }
         });
       }

@@ -15,6 +15,9 @@ import os
 import json
 import tempfile
 import subprocess
+import requests
+from django.http import HttpResponse
+import mimetypes
 
 # Get the user model (now points to CustomUser)
 User = get_user_model()
@@ -386,6 +389,85 @@ class S3SignedURLView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class S3ImageProxyView(APIView):
+    """Proxy endpoint for S3 images to avoid CORS issues"""
+    permission_classes = [AllowAny]  # Allow anyone to access images
+    
+    def get(self, request):
+        """Proxy requests to S3 and return the image data"""
+        url = request.GET.get('url')
+        if not url:
+            return Response({'error': 'URL parameter is required'}, 
+                           status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Extract S3 key from URL if it's an S3 URL
+            if 'amazonaws.com' in url:
+                # Parse S3 URL to get key
+                parts = url.split('amazonaws.com/')
+                if len(parts) > 1:
+                    key = parts[1].split('?')[0]  # Remove query params
+                    
+                    # Get a fresh signed URL
+                    s3_client = boto3.client(
+                        's3',
+                        aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID'),
+                        aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY'),
+                        region_name=settings.AWS_S3_REGION_NAME
+                    )
+                    
+                    # Generate signed URL
+                    signed_url = s3_client.generate_presigned_url(
+                        'get_object',
+                        Params={
+                            'Bucket': settings.AWS_STORAGE_BUCKET_NAME,
+                            'Key': key
+                        },
+                        ExpiresIn=300  # URL valid for 5 minutes
+                    )
+                    
+                    # Use the fresh signed URL
+                    url = signed_url
+            
+            # Make request to the URL
+            response = requests.get(url, stream=True)
+            
+            # Check if request was successful
+            if response.status_code != 200:
+                return Response(
+                    {'error': f'Failed to fetch image: HTTP {response.status_code}'},
+                    status=status.HTTP_502_BAD_GATEWAY
+                )
+            
+            # Determine content type
+            content_type = response.headers.get('Content-Type')
+            if not content_type:
+                # Try to guess content type from URL if not provided
+                content_type, _ = mimetypes.guess_type(url)
+                if not content_type:
+                    content_type = 'application/octet-stream'
+            
+            # Create Django response with streamed content
+            django_response = HttpResponse(
+                response.iter_content(chunk_size=1024),
+                content_type=content_type
+            )
+            
+            # Set Content-Length if available
+            if 'Content-Length' in response.headers:
+                django_response['Content-Length'] = response.headers['Content-Length']
+            
+            # Add cache headers
+            django_response['Cache-Control'] = 'max-age=86400'  # Cache for 24 hours
+            
+            return django_response
+            
+        except Exception as e:
+            return Response(
+                {'error': f'Error proxying image: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 '''from django.shortcuts import render
 from api.models import User

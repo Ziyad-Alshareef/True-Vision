@@ -25,6 +25,9 @@ import {
     DialogTitle,
   } from "../components/ui/dialog";
   
+  // Add this constant for API base URL (since importing it directly has issues)
+  const API_BASE_URL = import.meta.env.VITE_API_URL || "/choreo-apis/awbo/backend/rest-api-be2/v1.0";
+  
   // Define the analysis interface
   interface Analysis {
     id: string;
@@ -56,6 +59,7 @@ import {
   
     // Fetch user's analyses
     useEffect(() => {
+      // Create an async function inside the effect
       const fetchAnalyses = async () => {
         try {
           const token = localStorage.getItem('access');
@@ -66,24 +70,16 @@ import {
           
           setIsLoading(true);
           
-          // Check if we have a direct thumbnail URL from upload
-          let directThumbnailUrl = location.state?.directThumbnailUrl || localStorage.getItem('last_s3_thumbnail_url');
-          const lastUploadedId = location.state?.lastUploadedVideoId || localStorage.getItem('last_uploaded_video_id');
+          // Check if we have a signed thumbnail URL from the upload
+          const signedThumbnailUrl = location.state?.signedThumbnailUrl || 
+                                   localStorage.getItem('last_signed_thumbnail_url') ||
+                                   localStorage.getItem('last_api_signed_url');
+                                   
+          const lastUploadedId = location.state?.lastUploadedVideoId || 
+                               localStorage.getItem('last_uploaded_video_id');
           
-          // If we have a direct thumbnail URL, get a signed version
-          if (directThumbnailUrl) {
-            const s3Key = getS3KeyFromUrl(directThumbnailUrl);
-            if (s3Key) {
-              const signedUrl = await getSignedUrl(s3Key);
-              if (signedUrl) {
-                directThumbnailUrl = signedUrl;
-                console.log('Using signed URL for direct thumbnail:', directThumbnailUrl);
-              }
-            }
-          }
-          
-          if (directThumbnailUrl && lastUploadedId) {
-            console.log(`Found direct S3 thumbnail URL for video ${lastUploadedId}:`, directThumbnailUrl);
+          if (signedThumbnailUrl && lastUploadedId) {
+            console.log(`Found signed thumbnail URL for video ${lastUploadedId}:`, signedThumbnailUrl);
           }
           
           // Log API endpoints we're using
@@ -100,6 +96,14 @@ import {
           // Process videos to get signed URLs for all thumbnails
           if (videos && videos.length > 0) {
             for (const video of videos) {
+              // If this is the video that was just uploaded, use the signed URL we got from the upload process
+              if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
+                console.log(`Using provided signed URL for video ${video.Video_id}`);
+                video.thumbnail_url = signedThumbnailUrl;
+                continue;
+              }
+              
+              // Otherwise, get a signed URL from the backend
               if (video.thumbnail_url) {
                 const s3Key = getS3KeyFromUrl(video.thumbnail_url);
                 if (s3Key) {
@@ -128,15 +132,15 @@ import {
               videoMap[video.Video_id] = video;
               
               // If we have a direct URL for this video, replace the thumbnail URL
-              if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && directThumbnailUrl) {
+              if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
                 console.log(`Overriding thumbnail URL for video ${video.Video_id} with direct S3 URL`);
-                video.thumbnail_url = directThumbnailUrl;
+                video.thumbnail_url = signedThumbnailUrl;
               }
             });
             console.log('Video map with potential overrides:', videoMap);
             
             // Map analyses to their corresponding videos
-            const formattedAnalyses = analysisData.map((item: any) => {
+            const formattedAnalyses = await Promise.all(analysisData.map(async (item: any) => {
               try {
                 console.log('Processing analysis item:', item);
                 
@@ -200,8 +204,8 @@ import {
                   }
                   
                   // If this is the last uploaded video and we have a stored URL, use that
-                  if (!signedUrl && lastUploadedId && videoId.toString() === lastUploadedId.toString() && directThumbnailUrl) {
-                    thumbnailUrl = directThumbnailUrl;
+                  if (!signedUrl && lastUploadedId && videoId.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
+                    thumbnailUrl = signedThumbnailUrl;
                     console.log('Using stored direct S3 URL:', thumbnailUrl);
                   }
                 }
@@ -231,7 +235,7 @@ import {
                   video_url: null
                 };
               }
-            });
+            }));
             
             console.log('Final formatted analyses:', formattedAnalyses);
             setAnalyses(formattedAnalyses);
@@ -271,6 +275,7 @@ import {
         }
       };
   
+      // Call the async function
       fetchAnalyses();
     }, [navigate, location.state]);
   
@@ -340,12 +345,62 @@ import {
       navigate('/login');
     };
   
+    // Extract S3 key from URL
+    const getS3KeyFromUrl = (url: string): string | null => {
+      if (!url) return null;
+      
+      // Remove any query parameters first (everything after '?')
+      const baseUrl = url.split('?')[0];
+      
+      // For URLs like https://true-vision.s3.amazonaws.com/media/thumbnails/placeholder_1.jpg
+      if (baseUrl.includes('amazonaws.com')) {
+        const parts = baseUrl.split('amazonaws.com/');
+        if (parts.length > 1) {
+          return parts[1];
+        }
+      }
+      
+      // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
+      if (baseUrl.startsWith('media/')) {
+        return baseUrl;
+      }
+      
+      // For Django media URLs like /media/thumbnails/placeholder_1.jpg
+      if (baseUrl.startsWith('/media/')) {
+        return baseUrl.substring(1); // Remove leading slash
+      }
+      
+      // Handle direct file paths
+      if (baseUrl.includes('thumbnails/') || baseUrl.includes('videos/')) {
+        const pathParts = baseUrl.split('/');
+        // Extract folder/filename as the S3 key
+        const fileNameWithFolder = pathParts.slice(-2).join('/');
+        if (fileNameWithFolder.includes('thumbnail_') || 
+            fileNameWithFolder.includes('placeholder_') || 
+            fileNameWithFolder.includes('videos/')) {
+          return `media/${fileNameWithFolder}`;
+        }
+      }
+      
+      // If direct filename like thumbnail_1.jpg
+      if (baseUrl.includes('thumbnail_') || baseUrl.includes('placeholder_')) {
+        const fileName = baseUrl.split('/').pop();
+        return `media/thumbnails/${fileName}`;
+      }
+      
+      return null;
+    };
+  
     // Function to get a signed URL for S3 objects
     const getSignedUrl = async (s3Key: string): Promise<string | null> => {
       try {
-        const response = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(s3Key)}`);
+        // Remove any query parameters first (everything after '?')
+        const cleanKey = s3Key.split('?')[0];
+        
+        console.log(`Getting signed URL for clean key: ${cleanKey}`);
+        const response = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
         if (response.status === 200 && response.data && response.data.signed_url) {
-          console.log(`Got signed URL for ${s3Key}:`, response.data.signed_url);
+          console.log(`Got signed URL for ${cleanKey}:`, response.data.signed_url);
           return response.data.signed_url;
         }
         return null;
@@ -353,31 +408,6 @@ import {
         console.error('Error getting signed URL:', error);
         return null;
       }
-    };
-  
-    // Extract S3 key from URL
-    const getS3KeyFromUrl = (url: string): string | null => {
-      if (!url) return null;
-      
-      // For URLs like https://true-vision.s3.us-west-2.amazonaws.com/media/thumbnails/placeholder_1.jpg
-      if (url.includes('amazonaws.com')) {
-        const parts = url.split('amazonaws.com/');
-        if (parts.length > 1) {
-          return parts[1];
-        }
-      }
-      
-      // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
-      if (url.startsWith('media/')) {
-        return url;
-      }
-      
-      // For Django media URLs like /media/thumbnails/placeholder_1.jpg
-      if (url.startsWith('/media/')) {
-        return url.substring(1); // Remove leading slash
-      }
-      
-      return null;
     };
   
     // Load an image with a signed URL
@@ -401,6 +431,21 @@ import {
       }
       
       return signedUrl;
+    };
+  
+    // Add a new function to verify image URLs
+    const verifyImageUrl = async (url: string): Promise<boolean> => {
+      try {
+        // Use fetch with HEAD method to check if image exists
+        const response = await fetch(url, { 
+          method: 'HEAD',
+          mode: 'no-cors' // Important for cross-origin requests
+        });
+        return true; // If we get here, the image probably exists
+      } catch (error) {
+        console.error('Error verifying image URL:', error);
+        return false;
+      }
     };
   
     return (
@@ -533,50 +578,94 @@ import {
                         alt="Result preview"
                         className="w-full h-full object-contain"
                         onError={async (e) => {
-                          console.error('Error loading image:', selectedImage);
-                          
-                          // Try to see if we need to fix a broken URL
-                          let fixedUrl = selectedImage;
-                          
-                          // Check if it's a relative URL missing the domain
-                          if (selectedImage && selectedImage.startsWith('/media/')) {
-                            // Try to get a signed URL
+                          try {
+                            console.error('Error loading image:', selectedImage);
+                            const imgElement = e.currentTarget as HTMLImageElement;
+                            if (!imgElement) {
+                              console.error('Image element is null, cannot update src');
+                              return;
+                            }
+                            
+                            // Check if this is a CORS error
+                            const isCorsError = selectedImage.includes('amazonaws.com');
+                            
+                            if (isCorsError) {
+                              console.log('Likely CORS issue with S3 image, trying proxy endpoint');
+                              
+                              // Use our backend proxy endpoint
+                              const proxyUrl = `${API_BASE_URL}/proxy-image/?url=${encodeURIComponent(selectedImage)}`;
+                              console.log('Trying proxy URL:', proxyUrl);
+                              
+                              // No need to verify proxy - directly use it for S3 URLs
+                              imgElement.src = proxyUrl;
+                              return;
+                            }
+                            
+                            // Try direct key extraction and signed URL with fresh token
                             const s3Key = getS3KeyFromUrl(selectedImage);
                             if (s3Key) {
+                              console.log('Getting fresh signed URL for key:', s3Key);
                               const signedUrl = await getSignedUrl(s3Key);
-                              if (signedUrl) {
-                                fixedUrl = signedUrl;
-                                console.log('Got signed URL for relative path:', fixedUrl);
-                              } else {
-                                // Try to convert to S3 URL
-                                fixedUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/${selectedImage.split('/').pop()}`;
-                                console.log('Attempting to fix URL:', fixedUrl);
+                              if (signedUrl && signedUrl !== selectedImage) {
+                                console.log('Got fresh signed URL:', signedUrl);
+                                
+                                // Verify the URL works before setting it
+                                const urlWorks = await verifyImageUrl(signedUrl);
+                                if (urlWorks) {
+                                  imgElement.src = signedUrl;
+                                  return;
+                                }
                               }
                             }
-                          }
-                          
-                          // Check if it's an S3 URL but missing the thumbnails folder
-                          if (selectedImage && selectedImage.includes('s3.') && !selectedImage.includes('/thumbnails/')) {
-                            const parts = selectedImage.split('/');
-                            const filename = parts.pop();
-                            fixedUrl = [...parts, 'thumbnails', filename].join('/');
-                            console.log('Attempting to fix S3 path:', fixedUrl);
-                          }
-                          
-                          // If URL was modified, try the fixed version
-                          if (fixedUrl !== selectedImage) {
-                            console.log('Trying fixed URL:', fixedUrl);
-                            e.currentTarget.src = fixedUrl;
-                          } else {
-                            // Otherwise use placeholder
-                            e.currentTarget.src = 'https://placehold.co/600x400?text=No+Thumbnail';
+                            
+                            // Try specific image paths for the current analysis ID
+                            const currentAnalysis = analyses.find(a => a.id === selectedResult);
+                            if (currentAnalysis?.result?.video_id) {
+                              const videoId = currentAnalysis.result.video_id;
+                              console.log('Trying alternate paths for video ID:', videoId);
+                              
+                              // Try multiple possible paths
+                              const possiblePaths = [
+                                `media/thumbnails/placeholder_${videoId}.jpg`,
+                                `media/thumbnails/thumbnail_${videoId}.jpg`,
+                                `media/videos/video_${videoId}.mp4` // Try video thumbnail
+                              ];
+                              
+                              for (const path of possiblePaths) {
+                                const signedUrl = await getSignedUrl(path);
+                                if (signedUrl) {
+                                  // Verify before using
+                                  const urlWorks = await verifyImageUrl(signedUrl);
+                                  if (urlWorks) {
+                                    console.log('Found working signed URL:', signedUrl);
+                                    imgElement.src = signedUrl;
+                                    return;
+                                  }
+                                }
+                              }
+                            }
+                            
+                            // If all else fails, use placeholder
+                            console.log('All attempts failed, using placeholder');
+                            imgElement.src = 'https://placehold.co/600x400?text=No+Thumbnail+Available';
+                          } catch (error) {
+                            console.error('Error in image error handler:', error);
+                            // Try one last time with a safe fallback
+                            try {
+                              const imgElement = e.currentTarget as HTMLImageElement;
+                              if (imgElement) {
+                                imgElement.src = 'https://placehold.co/600x400?text=Error+Loading+Image';
+                              }
+                            } catch (finalError) {
+                              console.error('Even fallback image failed:', finalError);
+                            }
                           }
                         }}
                         onLoad={(e) => {
                           // Check if the image might be completely black
                           try {
                             console.log('Thumbnail loaded successfully:', selectedImage);
-                            const img = e.currentTarget;
+                            const img = e.currentTarget as HTMLImageElement;
                             
                             // Create a canvas to analyze the image
                             const canvas = document.createElement('canvas');
@@ -656,9 +745,7 @@ import {
                             {analyses.find(item => item.id === selectedResult)?.confidence}
                           </td>
                           <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
-                            <div>Duration: {analyses.find(item => item.id === selectedResult)?.duration}</div>
-                            <div>Resolution: {analyses.find(item => item.id === selectedResult)?.resolution}</div>
-                            <div>Frame Rate: {analyses.find(item => item.id === selectedResult)?.fps}</div>
+                            {analyses.find(item => item.id === selectedResult)?.duration}
                           </td>
                         </tr>
                       </tbody>
@@ -666,102 +753,36 @@ import {
                   </div>
                 </div>
               ) : (
-                <div className={`text-center py-12 ${isDarkMode ? 'text-neutral-400' : 'text-gray-500'}`}>
-                  <CpuIcon className="mx-auto h-12 w-12 mb-4 opacity-50" />
-                  <h2 className="text-xl font-medium mb-2">No result selected</h2>
-                  <p>Select a result from the sidebar or start a new detection.</p>
+                <div className="flex flex-col items-center justify-center h-96">
+                  <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} mb-4`}>Select a result to view details</p>
                 </div>
               )}
             </div>
           </main>
         )}
-  
-        {/* Delete Confirmation Dialog */}
-        <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-          <DialogContent className={`${isDarkMode ? 'bg-neutral-900 text-white' : 'bg-white text-gray-800'}`}>
-            <DialogHeader>
-              <DialogTitle>Delete Analysis</DialogTitle>
-              <DialogDescription className={isDarkMode ? 'text-neutral-400' : 'text-gray-500'}>
-                Are you sure you want to delete this analysis? This action cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button 
-                variant="outline" 
-                onClick={() => setIsDeleteDialogOpen(false)}
-                className={isDarkMode ? 'border-gray-700 text-white' : ''}
-              >
-                Cancel
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={confirmDelete}
-              >
-                Delete
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        
+        {isDeleteDialogOpen && selectedResult && (
+          <Dialog open={isDeleteDialogOpen} onOpenChange={() => setIsDeleteDialogOpen(false)}>
+            <DialogContent className={`${isDarkMode ? 'bg-[#333333] text-white' : 'bg-white text-black'}`}>
+              <DialogHeader>
+                <DialogTitle>Confirm Deletion</DialogTitle>
+                <DialogDescription className={`${isDarkMode ? 'text-neutral-300' : 'text-gray-500'}`}>
+                  Are you sure you want to delete Result#{selectedResult}? This action cannot be undone.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={confirmDelete}>
+                  Delete
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
     );
   };
 
-  export default Dashboard;
-
-/*import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from "../api";
-
-interface Analysis {
-  id: number;
-  result: {
-    is_fake: boolean;
-    confidence: number;
-  };
-  created_at: string;
-}
-
-const Dashboard: React.FC = () => {
-  const [analyses, setAnalyses] = useState<Analysis[]>([]);
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const token = localStorage.getItem('access');
-    if (!token) {
-      navigate('/login');
-      return;
-    }
-
-    fetchAnalyses();
-  }, [navigate]);
-
-  const fetchAnalyses = async (): Promise<void> => {
-    try {
-      const response = await api.get<Analysis[]>('/api/analysis/');
-      if (response.status === 200) {
-        setAnalyses(response.data);
-      }
-    } catch (error) {
-      console.error('Error fetching analyses:', error);
-    }
-  };
-
-  return (
-    <div className="container mx-auto px-4 py-8">
-      <h2 className="text-2xl font-bold mb-6 text-white">Your Analyses</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {analyses.map((analysis) => (
-          <div key={analysis.id} className="bg-gray-800 rounded-lg p-4">
-            <div className="text-white">
-              <p className="font-bold">Result: {analysis.result.is_fake ? 'Fake' : 'Real'}</p>
-              <p>Confidence: {analysis.result.confidence}%</p>
-              <p>Created: {new Date(analysis.created_at).toLocaleDateString()}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-export default Dashboard; */
+export default Dashboard;
