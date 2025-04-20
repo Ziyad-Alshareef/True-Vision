@@ -150,6 +150,14 @@ class Video(models.Model):
                 temp_thumb_path = temp_thumb.name
             print(f"Created temporary thumbnail file: {temp_thumb_path}")
             
+            # Make sure the file doesn't already exist (could cause issues with ffmpeg -y flag)
+            try:
+                if os.path.exists(temp_thumb_path):
+                    os.unlink(temp_thumb_path)
+                    print(f"Removed existing temporary thumbnail file")
+            except Exception as e:
+                print(f"Error removing existing thumbnail file: {str(e)}")
+            
             # Save the video to a temporary file if using S3
             if hasattr(self.Video_File, 'url'):
                 with tempfile.NamedTemporaryFile(suffix=os.path.splitext(self.Video_File.name)[1], delete=False) as temp_video:
@@ -208,6 +216,7 @@ class Video(models.Model):
                         '-vframes', '1',
                         '-q:v', '2',  # Higher quality setting
                         '-f', 'image2',
+                        '-y',  # Force overwrite if file exists
                         temp_thumb_path
                     ]
                     print(f"Running FFmpeg command: {' '.join(cmd)}")
@@ -291,6 +300,7 @@ class Video(models.Model):
                             '-vframes', '1',
                             '-q:v', '2',
                             '-f', 'image2',
+                            '-y',  # Force overwrite if file exists
                             temp_thumb_path
                         ]
                         # Run without check=True
@@ -326,6 +336,7 @@ class Video(models.Model):
                         '-i', temp_video_path,
                         '-vf', 'thumbnail,scale=480:320',  # Use thumbnail filter
                         '-frames:v', '1',
+                        '-y',  # Force overwrite if file exists
                         temp_thumb_path
                     ]
                     try:
@@ -352,7 +363,7 @@ class Video(models.Model):
                         '-i', temp_video_path,
                         '-f', 'mjpeg',  # Force MJPEG output
                         '-frames:v', '1',
-                        '-y',  # Overwrite if exists
+                        '-y',  # Force overwrite if file exists
                         output_jpg
                     ]
                     try:
