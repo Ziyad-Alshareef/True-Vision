@@ -94,28 +94,40 @@ class Video(models.Model):
     
     def generate_thumbnail(self):
         """Generate a thumbnail from the video"""
+        print(f"Starting thumbnail generation for video ID {self.Video_id}")
         try:
             # Create a temporary file
             with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_thumb:
                 temp_thumb_path = temp_thumb.name
+            print(f"Created temporary thumbnail file: {temp_thumb_path}")
             
             # Save the video to a temporary file if using S3
             if hasattr(self.Video_File, 'url'):
                 with tempfile.NamedTemporaryFile(suffix=os.path.splitext(self.Video_File.name)[1], delete=False) as temp_video:
                     temp_video_path = temp_video.name
+                    print(f"Created temporary video file: {temp_video_path}")
                     # Download the file from S3
-                    temp_video.write(self.Video_File.read())
+                    try:
+                        video_data = self.Video_File.read()
+                        print(f"Read {len(video_data)} bytes from S3")
+                        temp_video.write(video_data)
+                        print(f"Successfully wrote video data to temp file")
+                    except Exception as e:
+                        print(f"Error reading from S3: {str(e)}")
+                        raise
             else:
                 # The file is local
                 temp_video_path = self.Video_File.path
+                print(f"Using local video path: {temp_video_path}")
             
             # Use ffmpeg to extract a frame from the middle of the video
             # Try different timestamps to avoid black frames
-            timestamps = ['00:00:01', '00:00:03', '00:00:05', '00:00:10']
+            timestamps = ['00:00:01', '00:00:03', '00:00:05', '00:00:10', '00:00:15', '00:00:20', '00:00:30']
             success = False
             
             for timestamp in timestamps:
                 try:
+                    print(f"Attempting thumbnail extraction at timestamp {timestamp}")
                     # Try this timestamp
                     cmd = [
                         'ffmpeg',
@@ -126,13 +138,18 @@ class Video(models.Model):
                         '-f', 'image2',
                         temp_thumb_path
                     ]
+                    print(f"Running FFmpeg command: {' '.join(cmd)}")
                     result = subprocess.run(cmd, check=True, capture_output=True, text=True)
                     
                     # Check if the file was created and has content
                     if os.path.exists(temp_thumb_path) and os.path.getsize(temp_thumb_path) > 100:
+                        print(f"Thumbnail file created successfully: {os.path.getsize(temp_thumb_path)} bytes")
+                        
                         # Check if the image is not just black
                         img = Image.open(temp_thumb_path)
                         extrema = img.convert("L").getextrema()
+                        print(f"Image extrema (min/max): {extrema}")
+                        
                         # If min and max are too similar, the image is likely just one color (black)
                         if extrema[1] - extrema[0] > 30:
                             success = True
@@ -140,63 +157,142 @@ class Video(models.Model):
                             break
                         else:
                             print(f"Thumbnail at {timestamp} is too dark/uniform, trying next timestamp...")
+                    else:
+                        print(f"Thumbnail file is missing or too small: {os.path.exists(temp_thumb_path)}, {os.path.getsize(temp_thumb_path) if os.path.exists(temp_thumb_path) else 0}")
                 except subprocess.CalledProcessError as e:
                     print(f"Error generating thumbnail at {timestamp}: {e}")
                     print(f"FFMPEG stderr: {e.stderr}")
+                    print(f"FFMPEG stdout: {e.stdout}")
+                    continue
+                except Exception as e:
+                    print(f"Unexpected error during thumbnail generation at {timestamp}: {str(e)}")
                     continue
             
             if not success:
-                print("All thumbnail attempts failed, using simpler approach")
-                # Fallback to a simpler approach
-                cmd = [
-                    'ffmpeg',
-                    '-i', temp_video_path,
-                    '-vf', 'thumbnail,scale=480:320',  # Use thumbnail filter
-                    '-frames:v', '1',
-                    temp_thumb_path
-                ]
-                subprocess.run(cmd, check=True, capture_output=True)
+                print("All thumbnail attempts with timestamps failed, trying alternative approaches")
+                
+                # Try a different approach - seek to 10% of video duration
+                try:
+                    print("Trying to determine video duration...")
+                    # Get video duration
+                    duration_cmd = [
+                        'ffprobe',
+                        '-v', 'error',
+                        '-show_entries', 'format=duration',
+                        '-of', 'default=noprint_wrappers=1:nokey=1',
+                        temp_video_path
+                    ]
+                    duration_result = subprocess.run(duration_cmd, capture_output=True, text=True, check=True)
+                    duration = float(duration_result.stdout.strip())
+                    print(f"Video duration: {duration} seconds")
+                    
+                    # Try 10% into the video
+                    ten_percent = max(1, int(duration * 0.1))
+                    seek_timestamp = f"00:00:{ten_percent}"
+                    print(f"Trying to extract thumbnail at {seek_timestamp} (10% of duration)")
+                    
+                    seek_cmd = [
+                        'ffmpeg',
+                        '-i', temp_video_path,
+                        '-ss', seek_timestamp,
+                        '-vframes', '1',
+                        '-q:v', '2',
+                        '-f', 'image2',
+                        temp_thumb_path
+                    ]
+                    subprocess.run(seek_cmd, capture_output=True, check=True)
+                    
+                    # Check if the image is valid
+                    if os.path.exists(temp_thumb_path) and os.path.getsize(temp_thumb_path) > 100:
+                        img = Image.open(temp_thumb_path)
+                        extrema = img.convert("L").getextrema()
+                        if extrema[1] - extrema[0] > 30:
+                            success = True
+                            print(f"Generated valid thumbnail at 10% of duration")
+                        else:
+                            print("Thumbnail at 10% is too dark/uniform")
+                    else:
+                        print("Failed to create thumbnail at 10% of duration")
+                except Exception as e:
+                    print(f"Error with duration-based approach: {str(e)}")
+                
+                # If still not successful, try the thumbnail filter
+                if not success:
+                    print("Using thumbnail filter as fallback")
+                    # Fallback to a simpler approach
+                    cmd = [
+                        'ffmpeg',
+                        '-i', temp_video_path,
+                        '-vf', 'thumbnail,scale=480:320',  # Use thumbnail filter
+                        '-frames:v', '1',
+                        temp_thumb_path
+                    ]
+                    try:
+                        subprocess.run(cmd, check=True, capture_output=True)
+                        print("Thumbnail filter completed")
+                        success = os.path.exists(temp_thumb_path) and os.path.getsize(temp_thumb_path) > 100
+                        print(f"Thumbnail filter result: {success}, {os.path.getsize(temp_thumb_path) if os.path.exists(temp_thumb_path) else 0} bytes")
+                    except Exception as e:
+                        print(f"Error using thumbnail filter: {str(e)}")
             
-            # Open the generated thumbnail
-            with open(temp_thumb_path, 'rb') as f:
-                thumb_data = f.read()
-            
-            # Resize if needed
-            img = Image.open(io.BytesIO(thumb_data))
-            # Keep aspect ratio but limit to 480px max dimension
-            img.thumbnail((480, 480))
-            
-            
-            # Ensure image is RGB (in case it's grayscale/RGBA)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            
-            # Increase brightness and contrast slightly if the image is dark
-            enhancer = ImageEnhance.Brightness(img)
-            img = enhancer.enhance(1.2)  # Increase brightness by 20%
-            
-            enhancer = ImageEnhance.Contrast(img)
-            img = enhancer.enhance(1.2)  # Increase contrast by 20%
-            
-            # Save to in-memory buffer
-            buffer = io.BytesIO()
-            img.save(buffer, format='JPEG', quality=95)
-            buffer.seek(0)
-            
-            # Set the thumbnail field
-            file_name = f"thumbnail_{self.Video_id}.jpg"
-            self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
-            
-            # Clean up temp files
-            os.unlink(temp_thumb_path)
-            if hasattr(self.Video_File, 'url'):
-                os.unlink(temp_video_path)
+            # Process the thumbnail if we have one
+            if success:
+                print("Opening generated thumbnail")
+                # Open the generated thumbnail
+                with open(temp_thumb_path, 'rb') as f:
+                    thumb_data = f.read()
+                
+                # Resize if needed
+                img = Image.open(io.BytesIO(thumb_data))
+                print(f"Thumbnail dimensions: {img.width}x{img.height}, mode: {img.mode}")
+                # Keep aspect ratio but limit to 480px max dimension
+                img.thumbnail((480, 480))
+                print(f"Resized to: {img.width}x{img.height}")
+                
+                # Ensure image is RGB (in case it's grayscale/RGBA)
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                    print(f"Converted image to RGB mode")
+                
+                # Increase brightness and contrast slightly if the image is dark
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(1.2)  # Increase brightness by 20%
+                
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.2)  # Increase contrast by 20%
+                print("Applied brightness and contrast enhancements")
+                
+                # Save to in-memory buffer
+                buffer = io.BytesIO()
+                img.save(buffer, format='JPEG', quality=95)
+                buffer.seek(0)
+                print("Saved enhanced image to buffer")
+                
+                # Set the thumbnail field
+                file_name = f"thumbnail_{self.Video_id}.jpg"
+                self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
+                print(f"Successfully saved thumbnail as {file_name}")
+                
+                # Clean up temp files
+                try:
+                    os.unlink(temp_thumb_path)
+                    if hasattr(self.Video_File, 'url'):
+                        os.unlink(temp_video_path)
+                    print("Cleaned up temporary files")
+                except Exception as e:
+                    print(f"Error cleaning up: {str(e)}")
+                
+                return True
+            else:
+                print("All thumbnail generation attempts failed, creating placeholder")
+                raise Exception("Could not generate valid thumbnail")
                 
         except Exception as e:
-            print(f"Error generating thumbnail: {e}")
+            print(f"Error in thumbnail generation process: {e}")
             # If all else fails, create a colored placeholder
             try:
                 # Create a colored placeholder image
+                print("Creating colored placeholder image")
                 img = Image.new('RGB', (480, 320), color=(32, 127, 77))  # Green color
                 draw = ImageDraw.Draw(img)
                 draw.text((240, 160), "True Vision", fill=(255, 255, 255), anchor="mm")
@@ -209,8 +305,11 @@ class Video(models.Model):
                 # Save placeholder as thumbnail
                 file_name = f"placeholder_{self.Video_id}.jpg"
                 self.Thumbnail.save(file_name, ContentFile(buffer.read()), save=False)
+                print(f"Created placeholder thumbnail: {file_name}")
+                return False
             except Exception as e2:
                 print(f"Even placeholder creation failed: {e2}")
+                return False
 
 class Detection(models.Model):
     """Detection results from video analysis"""

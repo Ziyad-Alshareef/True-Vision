@@ -54,25 +54,6 @@ import {
     return `${cleanBase}/${cleanPath}`;
   };
   
-  // Add a new function to check if S3 objects exist
-  const checkS3ObjectExists = async (key: string): Promise<{exists: boolean, alternateKey?: string, signedUrl?: string}> => {
-    try {
-      const response = await api.get(`/s3/object-exists/?key=${encodeURIComponent(key)}`);
-      if (response.status === 200) {
-        console.log(`Object exists check for ${key}:`, response.data);
-        return {
-          exists: response.data.exists,
-          alternateKey: response.data.alternate_key,
-          signedUrl: response.data.signed_url
-        };
-      }
-      return { exists: false };
-    } catch (error) {
-      console.error('Error checking if S3 object exists:', error);
-      return { exists: false };
-    }
-  };
-  
   export const Dashboard = (): JSX.Element => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -84,6 +65,154 @@ import {
     const [analyses, setAnalyses] = useState<Analysis[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+  
+    // Update getS3KeyFromUrl to be more forgiving
+    const getS3KeyFromUrl = (url: string): string | null => {
+      if (!url) return null;
+      
+      // Remove any query parameters first (everything after '?')
+      const baseUrl = url.split('?')[0];
+      
+      // For URLs like https://true-vision.s3.amazonaws.com/media/thumbnails/placeholder_1.jpg
+      if (baseUrl.includes('amazonaws.com')) {
+        const parts = baseUrl.split('amazonaws.com/');
+        if (parts.length > 1) {
+          return parts[1];
+        }
+      }
+      
+      // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
+      if (baseUrl.startsWith('media/')) {
+        return baseUrl;
+      }
+      
+      // For Django media URLs like /media/thumbnails/placeholder_1.jpg
+      if (baseUrl.startsWith('/media/')) {
+        return baseUrl.substring(1); // Remove leading slash
+      }
+      
+      // If it contains thumbnail or placeholder in the path
+      if (baseUrl.includes('thumbnail_') || baseUrl.includes('placeholder_')) {
+        // Extract just the filename
+        const filename = baseUrl.split('/').pop();
+        if (filename) {
+          // Try to extract video ID from filename
+          const match = filename.match(/(?:thumbnail|placeholder)_(\d+)\.jpg$/);
+          if (match && match[1]) {
+            const videoId = match[1];
+            return `media/thumbnails/${filename}`;
+          }
+          return `media/thumbnails/${filename}`;
+        }
+      }
+
+      return null;
+    };
+  
+    // Fix the getSignedUrl function to work with the Heroku deployment
+    const getSignedUrl = async (s3Key: string): Promise<string | null> => {
+      try {
+        // Remove any query parameters first (everything after '?')
+        const cleanKey = s3Key.split('?')[0];
+        
+        console.log(`Getting signed URL for clean key: ${cleanKey}`);
+        
+        // First try the /s3/signed-url/ endpoint (which should be in the updated API)
+        try {
+          const response = await api.get(`/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
+          if (response.status === 200 && response.data && response.data.signed_url) {
+            console.log(`Got signed URL for ${cleanKey}:`, response.data.signed_url);
+            return response.data.signed_url;
+          }
+        } catch (newEndpointError) {
+          console.log('New endpoint not available, trying legacy endpoint');
+          // Fall back to legacy endpoint
+          const legacyResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
+          if (legacyResponse.status === 200 && legacyResponse.data && legacyResponse.data.signed_url) {
+            console.log(`Got signed URL from legacy endpoint for ${cleanKey}:`, legacyResponse.data.signed_url);
+            return legacyResponse.data.signed_url;
+          }
+        }
+        
+        return null;
+      } catch (error) {
+        console.error('Error getting signed URL:', error);
+        return null;
+      }
+    };
+  
+    // Add a function to check if endpoints are available on the backend
+    const checkEndpointAvailability = (() => {
+      // Cache the availability status
+      const availabilityCache: Record<string, boolean> = {};
+      
+      // Return a function that checks availability
+      return async (endpoint: string): Promise<boolean> => {
+        // Return from cache if already checked
+        if (availabilityCache.hasOwnProperty(endpoint)) {
+          return availabilityCache[endpoint];
+        }
+        
+        try {
+          // Try a HEAD request to check if endpoint exists
+          const response = await api.head(endpoint);
+          availabilityCache[endpoint] = response.status < 400;
+          return availabilityCache[endpoint];
+        } catch (error) {
+          console.log(`Endpoint ${endpoint} not available:`, error);
+          availabilityCache[endpoint] = false;
+          return false;
+        }
+      };
+    })();
+  
+    // Fix the checkS3ObjectExists function to handle nullable signedUrl correctly
+    const checkS3ObjectExists = async (key: string): Promise<{exists: boolean, alternateKey?: string, signedUrl?: string}> => {
+      try {
+        // First check if the endpoint is available
+        const isEndpointAvailable = await checkEndpointAvailability('/s3/object-exists/');
+        
+        if (!isEndpointAvailable) {
+          console.log('S3 object-exists endpoint not available, using direct signed URL');
+          try {
+            // Fall back to getting a signed URL directly
+            const directSignedUrl = await getSignedUrl(key);
+            return { 
+              exists: !!directSignedUrl, 
+              signedUrl: directSignedUrl || undefined  // Convert null to undefined
+            };
+          } catch (signedUrlError) {
+            console.error('Error getting signed URL:', signedUrlError);
+            return { exists: false };
+          }
+        }
+        
+        // If endpoint is available, use it
+        const response = await api.get(`/s3/object-exists/?key=${encodeURIComponent(key)}`);
+        if (response.status === 200) {
+          console.log(`Object exists check for ${key}:`, response.data);
+          return {
+            exists: response.data.exists,
+            alternateKey: response.data.alternate_key,
+            signedUrl: response.data.signed_url
+          };
+        }
+        return { exists: false };
+      } catch (error) {
+        console.error('Error checking if S3 object exists:', error);
+        try {
+          // Fall back to getting a signed URL directly
+          const directSignedUrl = await getSignedUrl(key);
+          return { 
+            exists: !!directSignedUrl, 
+            signedUrl: directSignedUrl || undefined  // Convert null to undefined
+          };
+        } catch (signedUrlError) {
+          console.error('Error getting fallback signed URL:', signedUrlError);
+          return { exists: false };
+        }
+      }
+    };
   
     // Fetch user's analyses
     useEffect(() => {
@@ -347,7 +476,7 @@ import {
             const finalKey = objectCheck.alternateKey || placeholderKey;
             const signedUrl = objectCheck.signedUrl || await getSignedUrl(finalKey);
             
-            if (signedUrl) {
+          if (signedUrl) {
               const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
               console.log('Using verified placeholder URL through proxy:', proxyUrl);
               setSelectedImage(proxyUrl);
@@ -404,66 +533,30 @@ import {
       navigate('/login');
     };
   
-    // Update getS3KeyFromUrl to be more forgiving
-    const getS3KeyFromUrl = (url: string): string | null => {
-      if (!url) return null;
-      
-      // Remove any query parameters first (everything after '?')
-      const baseUrl = url.split('?')[0];
-      
-      // For URLs like https://true-vision.s3.amazonaws.com/media/thumbnails/placeholder_1.jpg
-      if (baseUrl.includes('amazonaws.com')) {
-        const parts = baseUrl.split('amazonaws.com/');
-        if (parts.length > 1) {
-          return parts[1];
-        }
-      }
-      
-      // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
-      if (baseUrl.startsWith('media/')) {
-        return baseUrl;
-      }
-      
-      // For Django media URLs like /media/thumbnails/placeholder_1.jpg
-      if (baseUrl.startsWith('/media/')) {
-        return baseUrl.substring(1); // Remove leading slash
-      }
-      
-      // If it contains thumbnail or placeholder in the path
-      if (baseUrl.includes('thumbnail_') || baseUrl.includes('placeholder_')) {
-        // Extract just the filename
-        const filename = baseUrl.split('/').pop();
-        if (filename) {
-          // Try to extract video ID from filename
-          const match = filename.match(/(?:thumbnail|placeholder)_(\d+)\.jpg$/);
-          if (match && match[1]) {
-            const videoId = match[1];
-            return `media/thumbnails/${filename}`;
-          }
-          return `media/thumbnails/${filename}`;
-        }
-      }
-
-      return null;
-    };
-  
-    // Function to get a signed URL for S3 objects
-    const getSignedUrl = async (s3Key: string): Promise<string | null> => {
-      try {
-        // Remove any query parameters first (everything after '?')
-        const cleanKey = s3Key.split('?')[0];
+    // Add direct image loading function that bypasses the proxy
+    const loadImageDirectly = async (url: string, imgElement: HTMLImageElement): Promise<boolean> => {
+      return new Promise((resolve) => {
+        // Create a temporary image to test loading
+        const tempImg = new Image();
         
-        console.log(`Getting signed URL for clean key: ${cleanKey}`);
-        const response = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
-        if (response.status === 200 && response.data && response.data.signed_url) {
-          console.log(`Got signed URL for ${cleanKey}:`, response.data.signed_url);
-          return response.data.signed_url;
-        }
-        return null;
-      } catch (error) {
-        console.error('Error getting signed URL:', error);
-        return null;
-      }
+        // Set up event handlers
+        tempImg.onload = () => {
+          // Image loaded successfully, set it on the actual element
+          imgElement.src = url;
+          resolve(true);
+        };
+        
+        tempImg.onerror = () => {
+          // Failed to load
+          resolve(false);
+        };
+        
+        // Set a timeout to avoid hanging
+        setTimeout(() => resolve(false), 5000);
+        
+        // Try to load the image
+        tempImg.src = url;
+      });
     };
   
     // Load an image with a signed URL
@@ -643,17 +736,17 @@ import {
                             }
                             
                             // Check if this is a CORS error or 404
-                            const isCorsOrMissingFile = selectedImage.includes('amazonaws.com');
+                            const isCorsOrMissingFile = selectedImage?.includes('amazonaws.com') || false;
                             
                             if (isCorsOrMissingFile) {
-                              console.log('Likely S3 issue with image, trying proxy endpoint');
+                              console.log('Likely S3 issue with image, trying alternative approaches');
                               
                               // Extract video ID from the URL if possible
                               let videoId = null;
                               const currentAnalysis = analyses.find(a => a.id === selectedResult);
                               if (currentAnalysis?.result?.video_id) {
                                 videoId = currentAnalysis.result.video_id;
-                              } else {
+                              } else if (selectedImage) {
                                 // Try to extract from thumbnail URL
                                 const match = selectedImage.match(/(?:thumbnail|placeholder)_(\d+)\.jpg/);
                                 if (match && match[1]) {
@@ -661,47 +754,55 @@ import {
                                 }
                               }
                               
+                              // If we have a video ID, try different fallback approaches
                               if (videoId) {
                                 console.log('Found video ID:', videoId);
                                 
-                                // First try placeholder as it's more likely to exist
-                                const placeholderPath = `media/thumbnails/placeholder_${videoId}.jpg`;
+                                // Array of possible paths to try
+                                const pathsToTry = [
+                                  `media/thumbnails/placeholder_${videoId}.jpg`,
+                                  `media/thumbnails/thumbnail_${videoId}.jpg`,
+                                  `media/videos/thumbnail_${videoId}.jpg`
+                                ];
                                 
-                                // Get signed URL for the placeholder
-                                const placeholderSignedUrl = await getSignedUrl(placeholderPath);
+                                // Check if proxy endpoint is available
+                                const isProxyAvailable = await checkEndpointAvailability('/proxy-image/');
                                 
-                                if (placeholderSignedUrl) {
-                                  // Use our backend proxy endpoint with properly formatted URL
-                                  const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(placeholderSignedUrl)}`);
-                                  console.log('Trying proxy URL for placeholder:', proxyUrl);
-                                  
-                                  imgElement.src = proxyUrl;
-                                  return;
+                                // Try each path in sequence
+                                for (const path of pathsToTry) {
+                                  // Get signed URL for the path
+                                  const signedUrl = await getSignedUrl(path);
+                              
+                              if (signedUrl) {
+                                    if (isProxyAvailable) {
+                                      // Use proxy if available
+                                      const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
+                                      console.log(`Trying proxy URL for ${path}:`, proxyUrl);
+                                      
+                                      // Try proxy URL first
+                                      const proxySuccess = await loadImageDirectly(proxyUrl, imgElement);
+                                      if (proxySuccess) {
+                                        console.log('Proxy loading succeeded');
+                                        return;
+                                      }
+                                    }
+                                    
+                                    // If proxy failed or isn't available, try direct URL
+                                    console.log(`Trying direct signed URL for ${path}:`, signedUrl);
+                                    const directSuccess = await loadImageDirectly(signedUrl, imgElement);
+                                    if (directSuccess) {
+                                      console.log('Direct loading succeeded');
+                                return;
+                                    }
+                                  }
                                 }
                               }
                               
-                              // If we couldn't get a video ID or the placeholder doesn't exist,
-                              // fall back to a generic placeholder
-                              console.log('Using generic placeholder');
-                              imgElement.src = 'https://placehold.co/600x400?text=No+Thumbnail+Found';
+                              // If all attempts with paths failed, try a public placeholder service
+                              const placeholderUrl = 'https://placehold.co/600x400?text=No+Thumbnail+Found';
+                              console.log('Using public placeholder service:', placeholderUrl);
+                              imgElement.src = placeholderUrl;
                               return;
-                            }
-                            
-                            // Try direct key extraction and signed URL with fresh token
-                            const s3Key = getS3KeyFromUrl(selectedImage);
-                            if (s3Key) {
-                              console.log('Getting fresh signed URL for key:', s3Key);
-                              const signedUrl = await getSignedUrl(s3Key);
-                              if (signedUrl && signedUrl !== selectedImage) {
-                                console.log('Got fresh signed URL:', signedUrl);
-                                
-                                // Use our backend proxy endpoint with properly formatted URL
-                                const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
-                                console.log('Trying proxy URL:', proxyUrl);
-                                
-                                imgElement.src = proxyUrl;
-                                return;
-                              }
                             }
                             
                             // If all else fails, use placeholder
