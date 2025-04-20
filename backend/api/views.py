@@ -316,9 +316,25 @@ class VideoViewSet(viewsets.ModelViewSet):
     serializer_class = VideoSerializer
     permission_classes = [IsAuthenticated]
     
+    def get_serializer_context(self):
+        """Pass request to serializer for absolute URL generation"""
+        context = super().get_serializer_context()
+        return context
+    
     def get_queryset(self):
         """Filter videos to only show those belonging to the current user"""
         return Video.objects.filter(User_id=self.request.user).order_by('-Uploaded_at')
+        
+    def list(self, request, *args, **kwargs):
+        """Override list to print debugging information"""
+        queryset = self.get_queryset()
+        print(f"Found {queryset.count()} videos for user {request.user.username}")
+        
+        serializer = self.get_serializer(queryset, many=True)
+        for video_data in serializer.data:
+            print(f"Video {video_data['Video_id']} thumbnail: {video_data.get('thumbnail_url')}")
+        
+        return Response(serializer.data)
 
 '''from django.shortcuts import render
 from api.models import User

@@ -166,11 +166,28 @@ class VideoSerializer(serializers.ModelSerializer):
     
     def get_thumbnail_url(self, obj):
         if obj.Thumbnail:
-            return obj.Thumbnail.url
+            # Get the full URL path including domain
+            request = self.context.get('request')
+            if request is not None:
+                # For local development with relative URLs
+                if not obj.Thumbnail.url.startswith(('http://', 'https://')):
+                    return request.build_absolute_uri(obj.Thumbnail.url)
+            
+            # For S3 URLs
+            thumbnail_url = obj.Thumbnail.url
+            print(f"Thumbnail URL for video {obj.Video_id}: {thumbnail_url}")
+            return thumbnail_url
         return None
     
     def get_video_url(self, obj):
         if obj.Video_File:
+            # Get the full URL path
+            request = self.context.get('request')
+            if request is not None:
+                # For local development with relative URLs
+                if not obj.Video_File.url.startswith(('http://', 'https://')):
+                    return request.build_absolute_uri(obj.Video_File.url)
+            
             return obj.Video_File.url
         return obj.Video_Path
     

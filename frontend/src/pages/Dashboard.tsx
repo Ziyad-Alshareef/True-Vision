@@ -181,7 +181,15 @@ import {
                 setSelectedImage(firstAnalysis.thumbnail_url);
               } else {
                 console.log('No thumbnail URL available for first analysis');
-                setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+                // Try using a direct placeholder based on video ID
+                const videoId = firstAnalysis.result?.video_id;
+                if (videoId) {
+                  const placeholderUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/placeholder_${videoId}.jpg`;
+                  console.log('Trying placeholder URL:', placeholderUrl);
+                  setSelectedImage(placeholderUrl);
+                } else {
+                  setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+                }
               }
             }
           }
@@ -201,7 +209,21 @@ import {
       const analysis = analyses.find(a => a.id === id);
       console.log('Found analysis:', analysis);
       setSelectedResult(id);
-      setSelectedImage(analysis?.thumbnail_url || null);
+      
+      if (analysis?.thumbnail_url) {
+        setSelectedImage(analysis.thumbnail_url);
+      } else {
+        // Try using a direct placeholder based on video ID
+        const videoId = analysis?.result?.video_id;
+        if (videoId) {
+          const placeholderUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/placeholder_${videoId}.jpg`;
+          console.log('Trying placeholder URL:', placeholderUrl);
+          setSelectedImage(placeholderUrl);
+        } else {
+          setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+        }
+      }
+      
       setShowDetection(false);
     };
   
@@ -374,11 +396,38 @@ import {
                         className="w-full h-full object-contain"
                         onError={(e) => {
                           console.error('Error loading image:', selectedImage);
-                          e.currentTarget.src = 'https://placehold.co/600x400?text=No+Thumbnail';
+                          
+                          // Try to see if we need to fix a broken URL
+                          let fixedUrl = selectedImage;
+                          
+                          // Check if it's a relative URL missing the domain
+                          if (selectedImage && selectedImage.startsWith('/media/')) {
+                            // Try to convert to S3 URL
+                            fixedUrl = `https://s3.us-west-2.amazonaws.com/true-vision/media/thumbnails/${selectedImage.split('/').pop()}`;
+                            console.log('Attempting to fix URL:', fixedUrl);
+                          }
+                          
+                          // Check if it's an S3 URL but missing the thumbnails folder
+                          if (selectedImage && selectedImage.includes('s3.') && !selectedImage.includes('/thumbnails/')) {
+                            const parts = selectedImage.split('/');
+                            const filename = parts.pop();
+                            fixedUrl = [...parts, 'thumbnails', filename].join('/');
+                            console.log('Attempting to fix S3 path:', fixedUrl);
+                          }
+                          
+                          // If URL was modified, try the fixed version
+                          if (fixedUrl !== selectedImage) {
+                            console.log('Trying fixed URL:', fixedUrl);
+                            e.currentTarget.src = fixedUrl;
+                          } else {
+                            // Otherwise use placeholder
+                            e.currentTarget.src = 'https://placehold.co/600x400?text=No+Thumbnail';
+                          }
                         }}
                         onLoad={(e) => {
                           // Check if the image might be completely black
                           try {
+                            console.log('Thumbnail loaded successfully:', selectedImage);
                             const img = e.currentTarget;
                             
                             // Create a canvas to analyze the image
@@ -408,7 +457,25 @@ import {
                               // If avg brightness is too low, replace with placeholder
                               if (avgBrightness < 20) {
                                 console.log('Thumbnail appears to be too dark, replacing with placeholder');
-                                img.src = 'https://placehold.co/600x400?text=No+Visible+Thumbnail';
+                                
+                                // Check if green placeholder (then don't replace it)
+                                let greenPixels = 0;
+                                for (let i = 0; i < data.length; i += 4) {
+                                  // Check for green color dominance
+                                  if (data[i] < 100 && data[i+1] > 100 && data[i+2] < 100) {
+                                    greenPixels++;
+                                  }
+                                }
+                                
+                                const greenPercentage = greenPixels / (data.length / 4) * 100;
+                                console.log('Green percentage:', greenPercentage);
+                                
+                                // If not a green placeholder, replace with one
+                                if (greenPercentage < 30) {
+                                  img.src = 'https://placehold.co/600x400?text=No+Visible+Thumbnail';
+                                } else {
+                                  console.log('Detected green placeholder, keeping it');
+                                }
                               }
                             }
                           } catch (err) {
