@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model
 from .models import Analysis, Video, Model, Detection, DetectionModel, CustomUser
-from .serializers import CustomUserSerializer, AnalysisSerializer
+from .serializers import CustomUserSerializer, AnalysisSerializer, VideoSerializer
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
 import boto3
@@ -13,6 +13,8 @@ from django.conf import settings
 from botocore.exceptions import ClientError
 import os
 import json
+import tempfile
+import subprocess
 
 # Get the user model (now points to CustomUser)
 User = get_user_model()
@@ -179,25 +181,43 @@ class VideoUploadTestView(APIView):
                     'error': f"Error finding user: {str(e)}"
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
-            # Create a test analysis instead of a video
+            # Get video metadata using FFprobe
+            video_metadata = self.get_video_metadata(video_file)
+            
+            # Create a proper Video object instead of just an Analysis
+            video = Video(
+                User_id=user,
+                Video_File=video_file,
+                size=video_file.size,
+                Length=video_metadata.get('duration', 0),
+                Resolution=video_metadata.get('resolution', '0x0'),
+                Frame_per_Second=video_metadata.get('fps', 0)
+            )
+            
+            # Save the video (this will trigger the save method that generates thumbnail)
+            video.save()
+            
+            # Also create an analysis entry
             analysis = Analysis(
                 user=user,
                 video=video_file,
                 result=json.dumps({
                     "is_fake": False,
-                    "confidence": 95.5
+                    "confidence": 95.5,
+                    "video_id": video.Video_id
                 })
             )
             
-            # Save the analysis (this will upload to S3 if configured)
+            # Save the analysis
             analysis.save()
             
-            # Return success response
             return Response({
                 'success': True,
                 'message': 'Video uploaded successfully',
                 'analysis_id': analysis.id,
-                'video_path': analysis.video.url if analysis.video else None
+                'video_id': video.Video_id,
+                'video_path': video.Video_Path,
+                'thumbnail_path': video.Thumbnail.url if video.Thumbnail else None
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -205,6 +225,94 @@ class VideoUploadTestView(APIView):
                 'success': False,
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get_video_metadata(self, video_file):
+        """Extract metadata from video file"""
+        metadata = {
+            'duration': 0,
+            'resolution': '0x0',
+            'fps': 0
+        }
+        
+        try:
+            # Create a temporary file for FFprobe to analyze
+            with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_file.name)[1], delete=False) as temp_file:
+                # Save the uploaded file to the temporary file
+                for chunk in video_file.chunks():
+                    temp_file.write(chunk)
+                temp_file_path = temp_file.name
+            
+            # Use FFprobe to extract metadata
+            cmd = [
+                'ffprobe',
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height,r_frame_rate,duration',
+                '-of', 'json',
+                temp_file_path
+            ]
+            
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                probe_data = json.loads(result.stdout)
+                
+                # Extract metadata
+                if 'streams' in probe_data and len(probe_data['streams']) > 0:
+                    stream = probe_data['streams'][0]
+                    
+                    # Get resolution
+                    width = stream.get('width', 0)
+                    height = stream.get('height', 0)
+                    metadata['resolution'] = f"{width}x{height}"
+                    
+                    # Get duration
+                    if 'duration' in stream:
+                        metadata['duration'] = int(float(stream['duration']))
+                    
+                    # Get FPS (frame rate)
+                    if 'r_frame_rate' in stream:
+                        frame_rate = stream['r_frame_rate']
+                        if '/' in frame_rate:
+                            num, den = frame_rate.split('/')
+                            metadata['fps'] = int(float(num) / float(den))
+                        else:
+                            metadata['fps'] = int(float(frame_rate))
+            except (subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as e:
+                print(f"Error extracting metadata: {e}")
+                # Use some default values
+                metadata = {
+                    'duration': 10,
+                    'resolution': '640x480',
+                    'fps': 30
+                }
+            
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
+            # Reset file pointer for further processing
+            video_file.seek(0)
+            
+        except Exception as e:
+            print(f"Error in metadata extraction: {e}")
+            # Use default values
+            metadata = {
+                'duration': 10,
+                'resolution': '640x480',
+                'fps': 30
+            }
+        
+        return metadata
+
+# Add VideoViewSet to show videos in dashboard
+class VideoViewSet(viewsets.ModelViewSet):
+    """API endpoint to view and manage videos"""
+    queryset = Video.objects.all().order_by('-Uploaded_at')
+    serializer_class = VideoSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Filter videos to only show those belonging to the current user"""
+        return Video.objects.filter(User_id=self.request.user).order_by('-Uploaded_at')
 
 '''from django.shortcuts import render
 from api.models import User

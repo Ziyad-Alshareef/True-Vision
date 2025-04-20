@@ -78,7 +78,7 @@ export const Detection = () => {
       formData.append('video', selectedFile);
 
       // Make API request with upload progress
-      const response = await api.post('/api/detect/', formData, {
+      const response = await api.post('/api/test/upload/', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -91,7 +91,8 @@ export const Detection = () => {
       });
 
       // Check response and handle success
-      if (response.status === 200 || response.status === 201) {
+      if (response.status === 201) {
+        console.log('Upload successful:', response.data);
         // Pass a refresh flag in the state
         navigate('/dashboard', { state: { refresh: true } });
       }

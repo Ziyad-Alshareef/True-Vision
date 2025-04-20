@@ -36,7 +36,10 @@ import {
     result: {
       is_fake: boolean;
       confidence: number;
+      video_id?: number;
     };
+    thumbnail_url?: string;
+    video_url?: string;
   }
   
   export const Dashboard = (): JSX.Element => {
@@ -62,26 +65,41 @@ import {
           }
           
           setIsLoading(true);
-          const response = await api.get('/api/analysis/');
           
-          if (response.status === 200) {
-            // Format the data to match our expected structure
-            const formattedAnalyses = response.data.map((item: any) => ({
-              id: item.id.toString(),
-              confidence: `${(item.result.confidence * 100).toFixed(3)}%`,
-              duration: item.duration || "00:00",
-              resolution: item.resolution || "Unknown",
-              fps: item.fps || "Unknown",
-              created_at: item.created_at,
-              result: item.result
-            }));
+          // First get all video details
+          const videosResponse = await api.get('/api/videos/');
+          const videos = videosResponse.data;
+          
+          // Then get all analyses
+          const analysisResponse = await api.get('/api/analysis/');
+          const analysisData = analysisResponse.data;
+          
+          if (videosResponse.status === 200 && analysisResponse.status === 200) {
+            // Map analyses to their corresponding videos
+            const formattedAnalyses = analysisData.map((item: any) => {
+              // Find the corresponding video by id if referenced in the analysis
+              const videoId = item.result_data?.video_id;
+              const video = videoId ? videos.find((v: any) => v.Video_id === videoId) : null;
+              
+              return {
+                id: item.id.toString(),
+                confidence: `${(item.result_data?.confidence || 0).toFixed(1)}%`,
+                duration: video ? `${Math.floor(video.Length / 60)}:${(video.Length % 60).toString().padStart(2, '0')}` : "00:00",
+                resolution: video ? video.Resolution : "Unknown",
+                fps: video ? `${video.Frame_per_Second} fps` : "Unknown",
+                created_at: item.created_at,
+                result: item.result_data || { is_fake: false, confidence: 0 },
+                thumbnail_url: video ? video.thumbnail_url : null,
+                video_url: video ? video.video_url : null
+              };
+            });
             
             setAnalyses(formattedAnalyses);
             
             // Select the first result if available
             if (formattedAnalyses.length > 0) {
               setSelectedResult(formattedAnalyses[0].id);
-              setSelectedImage("/sample-image.jpg"); // Replace with actual thumbnail
+              setSelectedImage(formattedAnalyses[0].thumbnail_url || null);
             }
           }
         } catch (error) {
@@ -97,7 +115,8 @@ import {
   
     const handleResultClick = (id: string) => {
       setSelectedResult(id);
-      setSelectedImage("/sample-image.jpg"); // Replace with actual image handling
+      const analysis = analyses.find(a => a.id === id);
+      setSelectedImage(analysis?.thumbnail_url || null);
       setShowDetection(false);
     };
   
@@ -119,6 +138,8 @@ import {
         if (analyses.length > 1) {
           const newSelectedId = analyses.find(a => a.id !== selectedResult)?.id || null;
           setSelectedResult(newSelectedId);
+          const newAnalysis = analyses.find(a => a.id === newSelectedId);
+          setSelectedImage(newAnalysis?.thumbnail_url || null);
         } else {
           setSelectedResult(null);
           setSelectedImage(null);
@@ -287,7 +308,9 @@ import {
                               {analyses.find(item => item.id === selectedResult)?.confidence}
                             </td>
                             <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
-                              Duration: {analyses.find(item => item.id === selectedResult)?.duration}
+                              <div>Duration: {analyses.find(item => item.id === selectedResult)?.duration}</div>
+                              <div>Resolution: {analyses.find(item => item.id === selectedResult)?.resolution}</div>
+                              <div>Frame Rate: {analyses.find(item => item.id === selectedResult)?.fps}</div>
                             </td>
                           </tr>
                         )}

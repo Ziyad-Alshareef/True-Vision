@@ -123,46 +123,28 @@ class AnalysisSerializer(serializers.ModelSerializer):
     '''
 
 from rest_framework import serializers
-from .models import Analysis,CustomUser
+from .models import Analysis,CustomUser, Video
 import json
 
 class AnalysisSerializer(serializers.ModelSerializer):
-    result = serializers.JSONField()  # This will handle the JSON serialization/deserialization
-
+    result_data = serializers.SerializerMethodField()
+    
     class Meta:
         model = Analysis
-        fields = ('id', 'user', 'video', 'result', 'created_at')
-        read_only_fields = ('user', 'created_at')
-
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        # Convert the stored string back to JSON when retrieving
-        try:
-            ret['result'] = json.loads(instance.result)
-        except:
-            ret['result'] = {}
-        return ret
-
-    def to_internal_value(self, data):
-        # Convert JSON to string when saving
-        if 'result' in data and not isinstance(data['result'], str):
-            data = data.copy()
-            data['result'] = json.dumps(data['result'])
-        return super().to_internal_value(data)
+        fields = ['id', 'user', 'video', 'result_data', 'created_at']
+        read_only_fields = ['user', 'created_at']
     
+    def get_result_data(self, obj):
+        return obj.get_result()
 
-    
 class CustomUserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
-
+    email = serializers.EmailField(required=True)
+    
     class Meta:
         model = CustomUser
-        fields = ('id', 'username', 'email', 'password')
-        extra_kwargs = {
-            'password': {'write_only': True},
-            'email': {'required': True}
-        }
-    
+        fields = ['id', 'username', 'email', 'password']
+        
     def create(self, validated_data):
         user = CustomUser.objects.create_user(
             username=validated_data['username'],
@@ -170,3 +152,30 @@ class CustomUserSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         return user
+
+class VideoSerializer(serializers.ModelSerializer):
+    thumbnail_url = serializers.SerializerMethodField()
+    video_url = serializers.SerializerMethodField()
+    user = serializers.SerializerMethodField()
+    upload_date = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Video
+        fields = ['Video_id', 'user', 'video_url', 'thumbnail_url', 'Resolution', 
+                  'Length', 'size', 'upload_date', 'isAnalyzed', 'Frame_per_Second']
+    
+    def get_thumbnail_url(self, obj):
+        if obj.Thumbnail:
+            return obj.Thumbnail.url
+        return None
+    
+    def get_video_url(self, obj):
+        if obj.Video_File:
+            return obj.Video_File.url
+        return obj.Video_Path
+    
+    def get_user(self, obj):
+        return obj.User_id.username
+    
+    def get_upload_date(self, obj):
+        return obj.Uploaded_at.strftime('%Y-%m-%d %H:%M')
