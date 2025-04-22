@@ -17,22 +17,41 @@ from PIL import ImageDraw
 # Add this function to get the ffmpeg executable path
 def get_ffmpeg_path():
     """Get the path to the ffmpeg executable based on the project structure."""
-    # Check multiple possible locations for ffmpeg
-    possible_paths = [
+    # Check if we're running on Heroku
+    on_heroku = os.environ.get('DYNO') is not None
+    
+    if on_heroku:
+        # Heroku-specific paths - try these first when on Heroku
+        possible_paths = [
+            # Heroku buildpack location - most reliable for Heroku
+            '/app/vendor/ffmpeg/bin/ffmpeg',
+            # Standard Heroku paths
+            '/app/vendor/ffmpeg/ffmpeg',
+            '/usr/bin/ffmpeg',
+            # Fallback to system PATH
+            'ffmpeg',
+        ]
+    else:
         # Local development paths
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg.exe'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg'),
-        # Standard Heroku paths
-        '/app/vendor/ffmpeg/ffmpeg',
-        '/usr/bin/ffmpeg',
-        # Heroku buildpack location - most reliable for Heroku
-        '/app/vendor/ffmpeg/bin/ffmpeg',
-    ]
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg.exe'),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffmpeg'),
+            # Fallback to system PATH
+            'ffmpeg',
+        ]
     
     # Check if any of the paths exist
     for path in possible_paths:
         if os.path.exists(path):
             print(f"Found ffmpeg at: {path}")
+            # Check if the file is executable
+            if on_heroku and not os.access(path, os.X_OK):
+                print(f"Warning: FFmpeg found at {path} but it's not executable")
+                try:
+                    os.chmod(path, 0o755)  # Try to make it executable
+                    print(f"Made FFmpeg at {path} executable")
+                except Exception as e:
+                    print(f"Failed to make FFmpeg executable: {e}")
             return path
     
     # Fallback to system PATH
@@ -41,22 +60,41 @@ def get_ffmpeg_path():
 
 def get_ffprobe_path():
     """Get the path to the ffprobe executable based on the project structure."""
-    # Check multiple possible locations for ffprobe
-    possible_paths = [
+    # Check if we're running on Heroku
+    on_heroku = os.environ.get('DYNO') is not None
+    
+    if on_heroku:
+        # Heroku-specific paths - try these first when on Heroku
+        possible_paths = [
+            # Heroku buildpack location - most reliable for Heroku
+            '/app/vendor/ffmpeg/bin/ffprobe',
+            # Standard Heroku paths
+            '/app/vendor/ffmpeg/ffprobe',
+            '/usr/bin/ffprobe',
+            # Fallback to system PATH
+            'ffprobe',
+        ]
+    else:
         # Local development paths
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe.exe'),
-        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe'),
-        # Standard Heroku paths
-        '/app/vendor/ffmpeg/ffprobe',
-        '/usr/bin/ffprobe',
-        # Heroku buildpack location - most reliable for Heroku
-        '/app/vendor/ffmpeg/bin/ffprobe',
-    ]
+        possible_paths = [
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe.exe'),
+            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'bin', 'ffmpeg-6.1.1-essentials_build', 'bin', 'ffprobe'),
+            # Fallback to system PATH
+            'ffprobe',
+        ]
     
     # Check if any of the paths exist
     for path in possible_paths:
         if os.path.exists(path):
             print(f"Found ffprobe at: {path}")
+            # Check if the file is executable
+            if on_heroku and not os.access(path, os.X_OK):
+                print(f"Warning: FFprobe found at {path} but it's not executable")
+                try:
+                    os.chmod(path, 0o755)  # Try to make it executable
+                    print(f"Made FFprobe at {path} executable")
+                except Exception as e:
+                    print(f"Failed to make FFprobe executable: {e}")
             return path
     
     # Fallback to system PATH
