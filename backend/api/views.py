@@ -153,7 +153,7 @@ class S3TestView(APIView):
 # Also create a simple view to test uploading a video
 class VideoUploadTestView(APIView):
     """Test view for uploading videos to S3"""
-    permission_classes = [AllowAny]  # Allow anyone for testing
+    permission_classes = [IsAuthenticated]  # Allow only authenticated users
     parser_classes = [MultiPartParser, FormParser]
     
     def post(self, request, *args, **kwargs):
@@ -165,24 +165,8 @@ class VideoUploadTestView(APIView):
                            status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Instead of creating a new user, get the first user or an admin user
-            try:
-                # Try to get a superuser first
-                user = User.objects.filter(is_superuser=True).first()
-                if not user:
-                    # If no superuser, get the first user
-                    user = User.objects.first()
-                if not user:
-                    # If no users exist at all, create a fallback error
-                    return Response({
-                        'success': False,
-                        'error': "No users exist in the database to associate with the upload"
-                    }, status=status.HTTP_400_BAD_REQUEST)
-            except Exception as e:
-                return Response({
-                    'success': False,
-                    'error': f"Error finding user: {str(e)}"
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            # Use the currently authenticated user
+            user = request.user
             
             # Get video metadata using FFprobe
             video_metadata = self.get_video_metadata(video_file)
