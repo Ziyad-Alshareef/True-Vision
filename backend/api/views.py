@@ -36,7 +36,7 @@ class CreateUserView(generics.CreateAPIView):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
+'''
 class AnalysisViewSet(viewsets.ModelViewSet):
     queryset = Analysis.objects.all()
     serializer_class = AnalysisSerializer
@@ -70,7 +70,7 @@ class AnalysisViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
-
+'''
 # Add this new test view
 class S3TestView(APIView):
     """View to test S3 connection"""
