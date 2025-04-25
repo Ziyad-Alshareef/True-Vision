@@ -12,9 +12,16 @@ export default defineConfig({
   build: {
     rollupOptions: {
       external: []
-    }
+    },
+    cssCodeSplit: false,
+    assetsInlineLimit: 0,
+    minify: true,
   },
   optimizeDeps: {
     include: ['clsx', 'tailwind-merge']
+  },
+  css: {
+    postcss: './postcss.config.js',
+    devSourcemap: true,
   }
 }) 

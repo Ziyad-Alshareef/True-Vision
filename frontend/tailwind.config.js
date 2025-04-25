@@ -2,26 +2,12 @@
 export default {
   darkMode: 'class',
   content: [
-    "index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
+    'dist/**/*.html',
+    './**/*.html',
+    './src/**/*.{js,jsx,ts,tsx}',
+    './index.html',
   ],
-  safelist: [
-    'bg-primary',
-    'text-primary',
-    'bg-secondary',
-    'text-secondary',
-    'bg-background',
-    'text-foreground',
-    'border-border',
-    'bg-muted',
-    'text-muted-foreground',
-    'bg-accent',
-    'text-accent-foreground',
-    'bg-popover',
-    'text-popover-foreground',
-    'bg-card',
-    'text-card-foreground',
-  ],
+  safelist: 'all', // Force include all classes
   theme: {
     extend: {
       colors: {
