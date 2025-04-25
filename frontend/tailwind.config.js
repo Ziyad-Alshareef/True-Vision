@@ -2,8 +2,8 @@
 export default {
   darkMode: 'class',
   content: [
-    "./**/*.html",
-    "./src/**/*.{js,jsx,ts,tsx}",
+    './index.html',
+    './src/**/*.{js,jsx,ts,tsx}',
   ],
   safelist: 'all', // Force include all classes
   theme: {
