@@ -4,6 +4,23 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  safelist: [
+    'bg-primary',
+    'text-primary',
+    'bg-secondary',
+    'text-secondary',
+    'bg-background',
+    'text-foreground',
+    'border-border',
+    'bg-muted',
+    'text-muted-foreground',
+    'bg-accent',
+    'text-accent-foreground',
+    'bg-popover',
+    'text-popover-foreground',
+    'bg-card',
+    'text-card-foreground',
+  ],
   darkMode: 'class',
   theme: {
     extend: {
