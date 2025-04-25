@@ -2,8 +2,8 @@
 export default {
   darkMode: 'class',
   content: [
-    './index.html', // Scan index.html at the root of frontend
-    './src/**/*.{js,jsx,ts,tsx}', // Scan all JS/TS/JSX/TSX files in the src directory
+    './index.html',
+    './src/**/*.{js,jsx,ts,tsx}',
   ],
   safelist: 'all', // Force include all classes
   theme: {
