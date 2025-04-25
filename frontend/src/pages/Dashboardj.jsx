@@ -16,6 +16,7 @@ const Dashboard = () => {
     fetchAnalyses();
   }, [navigate]);
 
+  
   const fetchAnalyses = async () => {
     try {
       const response = await api.get('/api/analysis/');
