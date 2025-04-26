@@ -38,12 +38,12 @@ export const Home = () => {
       <main className="flex-grow flex items-center justify-center p-6">
         <div className="flex flex-col md:flex-row items-center max-w-6xl mx-auto gap-12">
           {/* Left side - Image */}
-          <div className="w-full md:w-1/2">
-            <div className="rounded-lg overflow-hidden bg-black">{/*//////////////////////////ALI put the figma photo here please /////////////////////////////*/}
+          <div className="w-full md:w-1/2 max-w-[500px] mx-auto">
+            <div className="rounded-lg overflow-hidden bg-black">
               <img
                 src={deepFakeHero}
                 alt="Deep Fake Detection"
-                className="w-full h-auto"
+                className="w-full h-auto object-contain"
               />
             </div>
           </div>
