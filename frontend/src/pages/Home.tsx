@@ -36,38 +36,38 @@ export const Home = () => {
 
       {/* Main Content */}
       <main className="flex-grow flex items-center justify-center p-6">
-        <div className="flex flex-col md:flex-row items-center max-w-6xl mx-auto gap-12">
+        <div className="container flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-8 md:gap-12">
           {/* Left side - Image */}
-          <div className="w-full md:w-1/2 max-w-[500px] mx-auto">
-            <div className="rounded-lg overflow-hidden bg-black">
+          <div className="w-full md:w-1/2 flex justify-center">
+            <div className="rounded-lg overflow-hidden bg-black max-w-[600px] w-full">
               <img
                 src={deepFakeHero}
                 alt="Deep Fake Detection"
-                className="w-full h-auto object-contain"
+                className="w-full h-auto object-cover aspect-[16/9]"
               />
             </div>
           </div>
 
           {/* Right side - Content */}
-          <div className="w-full md:w-1/2 text-center md:text-left">
-            <h1 className="text-4xl font-bold mb-4">
+          <div className="w-full md:w-1/2 text-center md:text-left flex flex-col gap-6">
+            <h1 className="text-4xl md:text-5xl font-bold">
               <span className={isDarkMode ? "text-white" : "text-gray-800"}>True</span>{' '}
               <span className="text-[#097F4D]">Vision</span>
             </h1>
-            <p className={isDarkMode ? "text-gray-400 mb-8" : "text-gray-600 mb-8"}>
+            <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
               Enabling you to easily identify deepfake videos using AI algorithms.
             </p>
             <div className="flex gap-4 justify-center md:justify-start">
               <Button
                 asChild
-                className="bg-[#097F4D] hover:bg-[#076b41] text-white px-6"
+                className="bg-[#097F4D] hover:bg-[#076b41] text-white px-6 py-2 text-lg"
               >
                 <Link to="/signup">New account</Link>
               </Button>
               <Button
                 asChild
                 variant="outline"
-                className="border-[#097F4D] text-[#097F4D] hover:bg-[#097F4D] hover:text-white px-6"
+                className="border-[#097F4D] text-[#097F4D] hover:bg-[#097F4D] hover:text-white px-6 py-2 text-lg"
               >
                 <Link to="/login">Login</Link>
               </Button>
