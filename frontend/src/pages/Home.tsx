@@ -2,7 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import whiteLogo from "./assets/whitefont-transpa.png";
-import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png"; 
+import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
+import deepFakeHero from "@/styles/deep-fake-hero.png";
 import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -11,14 +12,13 @@ export const Home = () => {
   const { isDarkMode, isTransitioning } = useTheme();
 
   return (
-    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex flex-col ${
-      isTransitioning ? 'theme-transitioning' : ''
-    }`}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex flex-col ${isTransitioning ? 'theme-transitioning' : ''
+      }`}>
       {/* Theme Toggle Button - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
       </div>
-    
+
       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
@@ -41,9 +41,8 @@ export const Home = () => {
           <div className="w-full md:w-1/2">
             <div className="rounded-lg overflow-hidden bg-black">{/*//////////////////////////ALI put the figma photo here please /////////////////////////////*/}
               <img
-                src="/deep-fake-hero.png"
+                src={deepFakeHero}
                 alt="Deep Fake Detection"
-                
                 className="w-full h-auto"
               />
             </div>
@@ -130,13 +129,13 @@ const Home: React.FC = () => {
         <div className="text-center">
           <div className="text-green-500 mb-4">
             {/* Icon */ /*}
-          </div>
-          <h3 className="font-semibold mb-2">Accurate Detection</h3>
-          <p className="text-gray-400">Ensuring precise identification of manipulated content.</p>
-        </div>
-      </div>
-    </div>
-  );
+</div>
+<h3 className="font-semibold mb-2">Accurate Detection</h3>
+<p className="text-gray-400">Ensuring precise identification of manipulated content.</p>
+</div>
+</div>
+</div>
+);
 };
 
 export default Home; */
