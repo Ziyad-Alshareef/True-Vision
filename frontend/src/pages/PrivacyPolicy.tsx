@@ -23,11 +23,13 @@ const PrivacyPolicy: React.FC = () => {
             {/* Header */}
             <header className="p-6">
                 <div className="flex items-center">
-                    <img
-                        src={isDarkMode ? whiteLogo : darkLogo}
-                        alt="True Vision Logo"
-                        className="h-[90px] w-auto"
-                    />
+                    <Link to="/">
+                        <img
+                            src={isDarkMode ? whiteLogo : darkLogo}
+                            alt="True Vision Logo"
+                            className="h-[90px] w-auto"
+                        />
+                    </Link>
                 </div>
             </header>
 

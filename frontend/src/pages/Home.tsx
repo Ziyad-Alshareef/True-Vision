@@ -25,11 +25,13 @@ export const Home = () => {
       {/* Header */}
       <header className="p-6">
         <div className="flex items-center">
-          <img
-            src={isDarkMode ? whiteLogo : darkLogo}
-            alt="True Vision Logo"
-            className="h-[90px] w-auto"
-          />
+          <Link to="/">
+            <img
+              src={isDarkMode ? whiteLogo : darkLogo}
+              alt="True Vision Logo"
+              className="h-[90px] w-auto"
+            />
+          </Link>
         </div>
       </header>
 
@@ -39,12 +41,11 @@ export const Home = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-12">
             {/* Left side - Image */}
             <div className="w-full md:w-1/2 flex justify-center">
-              <div className="relative w-full max-w-3xl rounded-lg overflow-hidden bg-black aspect-video">
+              <div className="relative w-full max-w-3xl rounded-lg overflow-hidden bg-black">
                 <img
                   src={deepFakeHero}
                   alt="Deep Fake Detection"
-                  className="absolute inset-0 w-full h-full object-cover"
-                  style={{ objectPosition: 'center' }}
+                  className="w-full h-auto object-contain max-w-full"
                 />
               </div>
             </div>
