@@ -39,7 +39,7 @@ export const Home = () => {
           <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12">
             {/* Left side - Image */}
             <div className="w-full md:w-1/2">
-              <div className="relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-black">
+              <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ paddingTop: '56.25%' }}>
                 <img
                   src={deepFakeHero}
                   alt="Deep Fake Detection"
@@ -47,6 +47,8 @@ export const Home = () => {
                   style={{ objectPosition: 'center' }}
                 />
               </div>
+
+
             </div>
 
             {/* Right side - Content */}
