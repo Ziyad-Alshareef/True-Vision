@@ -12,8 +12,7 @@ export const Home = () => {
   const { isDarkMode, isTransitioning } = useTheme();
 
   return (
-    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex flex-col ${isTransitioning ? 'theme-transitioning' : ''
-      }`}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex flex-col ${isTransitioning ? 'theme-transitioning' : ''}`}>
       {/* Theme Toggle Button - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
@@ -22,6 +21,7 @@ export const Home = () => {
       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
+
       {/* Header */}
       <header className="p-6">
         <div className="flex items-center">
@@ -30,7 +30,6 @@ export const Home = () => {
             alt="True Vision Logo"
             className="h-[90px] w-auto"
           />
-          {/*<span className="text-white ml-2">TRUE VISION</span>*/}
         </div>
       </header>
 
@@ -39,11 +38,11 @@ export const Home = () => {
         <div className="container flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-8 md:gap-12">
           {/* Left side - Image */}
           <div className="w-full md:w-1/2 flex justify-center">
-            <div className="rounded-lg overflow-hidden bg-black w-full max-w-[1000px] aspect-[16/9] flex items-center justify-center">
+            <div className="relative w-full max-w-[600px] aspect-[16/9] rounded-lg overflow-hidden bg-black">
               <img
                 src={deepFakeHero}
                 alt="Deep Fake Detection"
-                className="w-full h-full object-cover aspect-[16/9] max-h-[900px] md:max-h-[1000px]"
+                className="absolute inset-0 w-full h-full object-cover"
               />
             </div>
           </div>
