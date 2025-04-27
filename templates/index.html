@@ -1,22 +1,83 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>EffNet-LSTM Video Inference</title>
-  </head>
-  <body>
-    <h1>Upload a Video to Classify</h1>
-    <form action="/predict" method="post" enctype="multipart/form-data">
-        <input type="file" name="video" accept="video/*" required>
-        <button type="submit">Predict</button>
-      </form>
-      
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Deepfake Detection - Video Inference</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f6f8;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-height: 100vh;
+      justify-content: center;
+    }
 
-    {% if result is defined %}
-      <h2>
-        Prediction: {{ result.label }}
-        ({{ (result.prob * 100)|round(2) }}%)
-      </h2>
-    {% endif %}
-  </body>
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+    }
+
+    form {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+
+    input[type="file"] {
+      padding: 5px;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #0066cc;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #004c99;
+    }
+
+    .result {
+      margin-top: 20px;
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      text-align: center;
+      font-size: 18px;
+    }
+  </style>
+</head>
+
+<body>
+
+  <h1>Deepfake Detection</h1>
+  <p>Upload a video to detect whether it is real or fake</p>
+
+  <form action="/predict" method="post" enctype="multipart/form-data">
+    <input type="file" name="video" accept="video/*" required>
+    <button type="submit">Analyze Video</button>
+  </form>
+
+  {% if result is defined %}
+    <div class="result">
+      <h2>Prediction Result</h2>
+      <p><strong>{{ result.label }}</strong> (Confidence: {{ (result.prob * 100) | round(2) }}%)</p>
+    </div>
+  {% endif %}
+
+</body>
 </html>
