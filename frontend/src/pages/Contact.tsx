@@ -89,10 +89,11 @@ const Contact: React.FC = () => {
                     </div>
                     {/* Page Title and Description */}
                     <div className="w-full text-center flex flex-col gap-6 mt-8">
-                        <h1 className="text-4xl md:text-5xl font-bold">
+                        <h1 className="text-6xl md:text-7xl font-bold">
                             <span className={isDarkMode ? "text-white" : "text-gray-800"}>Contact</span>{' '}
                             <span className="text-[#097F4D]">Us</span>
                         </h1>
+
                         <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
                             Get to know the talented individuals behind True Vision. Connect with us for any inquiries or collaborations!
                         </p>
@@ -101,8 +102,8 @@ const Contact: React.FC = () => {
             </main>
 
             {/* Footer */}
-            <footer className="p-4">
-                <div className="flex justify-center gap-4 text-sm">
+            <footer className="p-6">
+                <div className="flex justify-center gap-4 text-base">
                     <Link to="/privacy-policy" className="text-[#097F4D] hover:text-[#076b41]">
                         Privacy Policy
                     </Link>

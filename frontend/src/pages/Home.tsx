@@ -35,41 +35,44 @@ export const Home = () => {
 
       {/* Main Content */}
       <main className="flex-grow flex items-center justify-center p-6">
-        <div className="container flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-8 md:gap-12">
-          {/* Left side - Image */}
-          <div className="w-full md:w-1/2 flex justify-center">
-            <div className="relative w-full max-w-[600px] aspect-[16/9] rounded-lg overflow-hidden bg-black">
-              <img
-                src={deepFakeHero}
-                alt="Deep Fake Detection"
-                className="absolute inset-0 w-full h-full object-cover"
-              />
+        <div className="w-full max-w-6xl mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12">
+            {/* Left side - Image */}
+            <div className="w-full md:w-1/2">
+              <div className="relative w-full aspect-[16/9] rounded-lg overflow-hidden bg-black">
+                <img
+                  src={deepFakeHero}
+                  alt="Deep Fake Detection"
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{ objectPosition: 'center' }}
+                />
+              </div>
             </div>
-          </div>
 
-          {/* Right side - Content */}
-          <div className="w-full md:w-1/2 flex flex-col justify-center items-center md:items-start text-center md:text-left gap-6">
-            <h1 className="text-4xl md:text-5xl font-bold">
-              <span className={isDarkMode ? "text-white" : "text-gray-800"}>True</span>{' '}
-              <span className="text-[#097F4D]">Vision</span>
-            </h1>
-            <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
-              Enabling you to easily identify deepfake videos using AI algorithms.
-            </p>
-            <div className="flex gap-4 justify-center md:justify-start">
-              <Button
-                asChild
-                className="bg-[#097F4D] hover:bg-[#076b41] text-white px-6 py-2 text-lg"
-              >
-                <Link to="/signup">New account</Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="border-[#097F4D] text-[#097F4D] hover:bg-[#097F4D] hover:text-white px-6 py-2 text-lg"
-              >
-                <Link to="/login">Login</Link>
-              </Button>
+            {/* Right side - Content */}
+            <div className="w-full md:w-1/2 flex flex-col justify-center items-center md:items-start text-center md:text-left gap-6">
+              <h1 className="text-4xl md:text-5xl font-bold">
+                <span className={isDarkMode ? "text-white" : "text-gray-800"}>True</span>{' '}
+                <span className="text-[#097F4D]">Vision</span>
+              </h1>
+              <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
+                Enabling you to easily identify deepfake videos using AI algorithms.
+              </p>
+              <div className="flex gap-4 justify-center md:justify-start">
+                <Button
+                  asChild
+                  className="bg-[#097F4D] hover:bg-[#076b41] text-white px-6 py-2 text-lg"
+                >
+                  <Link to="/signup">New account</Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-[#097F4D] text-[#097F4D] hover:bg-[#097F4D] hover:text-white px-6 py-2 text-lg"
+                >
+                  <Link to="/login">Login</Link>
+                </Button>
+              </div>
             </div>
           </div>
         </div>

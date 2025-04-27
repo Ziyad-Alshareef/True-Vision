@@ -8,7 +8,7 @@ import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
 import ResetPassword from './pages/ResetPassword';
 import Contact from './pages/Contact';
-import PrivacyPolicy from './pages/PrivacyPolicy';
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 
