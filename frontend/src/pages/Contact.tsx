@@ -50,61 +50,58 @@ const Contact: React.FC = () => {
             </div>
 
             {/* Header */}
-            <header className="p-4">
+            <header className="p-6">
                 <div className="flex items-center">
-                    <Link to="/">
-                        <img
-                            src={isDarkMode ? whiteLogo : darkLogo}
-                            alt="True Vision Logo"
-                            className="h-[70px] w-auto"
-                        />
-                    </Link>
+                    <img
+                        src={isDarkMode ? whiteLogo : darkLogo}
+                        alt="True Vision Logo"
+                        className="h-[90px] w-auto"
+                    />
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 container mx-auto px-6">
-                {/* Page Title */}
-                <div className="text-center mb-8">
-                    <h1 className="text-3xl md:text-4xl font-bold mb-2">
-                        <span className={isDarkMode ? "text-white" : "text-gray-800"}>Meet Our </span>
-                        <span className="text-[#097F4D]">Team</span>
-                    </h1>
-                    <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-base max-w-2xl mx-auto`}>
-                        Get to know the talented individuals behind True Vision who are dedicated to making the digital world safer.
-                    </p>
-                </div>
-
-                {/* Team Members Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {teamMembers.map((member, index) => (
-                        <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-4 shadow-lg transition-all hover:shadow-xl`}>
-                            <div className="aspect-square mb-3 overflow-hidden rounded-lg">
-                                <img
-                                    src={member.image}
-                                    alt={member.name}
-                                    className="w-full h-full object-cover"
-                                />
+            <main className="flex-grow flex items-center justify-center p-6">
+                <div className="container flex flex-col items-center max-w-6xl mx-auto gap-12">
+                    {/* Team Members Row */}
+                    <div className="w-full flex flex-row flex-wrap justify-center gap-6">
+                        {teamMembers.map((member, index) => (
+                            <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-4 shadow-lg flex flex-col items-center min-w-[180px] max-w-[200px]`}>
+                                <div className="aspect-square w-28 mb-3 overflow-hidden rounded-full border-2 border-[#097F4D]">
+                                    <img
+                                        src={member.image}
+                                        alt={member.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                </div>
+                                <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{member.name}</h3>
+                                <a
+                                    href={member.linkedin}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-2 text-[#097F4D] hover:text-[#076b41] transition-colors text-sm"
+                                >
+                                    <FaLinkedin className="text-lg" />
+                                    <span>LinkedIn</span>
+                                </a>
                             </div>
-                            <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                                {member.name}
-                            </h3>
-                            <a
-                                href={member.linkedin}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-2 text-[#097F4D] hover:text-[#076b41] transition-colors"
-                            >
-                                <FaLinkedin className="text-lg" />
-                                <span>Connect on LinkedIn</span>
-                            </a>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
+                    {/* Page Title and Description */}
+                    <div className="w-full text-center flex flex-col gap-6 mt-8">
+                        <h1 className="text-4xl md:text-5xl font-bold">
+                            <span className={isDarkMode ? "text-white" : "text-gray-800"}>Contact</span>{' '}
+                            <span className="text-[#097F4D]">Us</span>
+                        </h1>
+                        <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
+                            Get to know the talented individuals behind True Vision. Connect with us for any inquiries or collaborations!
+                        </p>
+                    </div>
                 </div>
             </main>
 
             {/* Footer */}
-            <footer className="p-4">
+            <footer className="p-6">
                 <div className="flex justify-center gap-4 text-sm">
                     <Link to="/privacy-policy" className="text-[#097F4D] hover:text-[#076b41]">
                         Privacy Policy
