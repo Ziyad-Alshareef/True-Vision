@@ -39,11 +39,11 @@ export const Home = () => {
         <div className="container flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-8 md:gap-12">
           {/* Left side - Image */}
           <div className="w-full md:w-1/2 flex justify-center">
-            <div className="rounded-lg overflow-hidden bg-black w-full max-w-[500px]">
+            <div className="rounded-lg overflow-hidden bg-black w-full max-w-[1000px] aspect-[16/9] flex items-center justify-center">
               <img
                 src={deepFakeHero}
                 alt="Deep Fake Detection"
-                className="w-full h-auto object-cover aspect-[16/9] max-h-[350px] md:max-h-[400px]"
+                className="w-full h-full object-cover aspect-[16/9] max-h-[900px] md:max-h-[1000px]"
               />
             </div>
           </div>
