@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import whiteLogo from "./assets/whitefont-transpa.png";
 import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
-import deepFakeHero from "@/styles/deep-fake-hero.png";
+import deepFakeHero from "../styles/deep-fake-hero.png";
 import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
