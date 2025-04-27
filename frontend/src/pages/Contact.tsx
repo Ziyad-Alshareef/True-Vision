@@ -35,7 +35,7 @@ const teamMembers = [
     }
 ];
 
-export const Contact = () => {
+const Contact: React.FC = () => {
     const { isDarkMode, isTransitioning } = useTheme();
 
     return (
