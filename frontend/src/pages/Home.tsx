@@ -39,17 +39,17 @@ export const Home = () => {
         <div className="container flex flex-col md:flex-row items-center justify-between max-w-6xl mx-auto gap-8 md:gap-12">
           {/* Left side - Image */}
           <div className="w-full md:w-1/2 flex justify-center">
-            <div className="rounded-lg overflow-hidden bg-black max-w-[600px] w-full">
+            <div className="rounded-lg overflow-hidden bg-black w-full max-w-[500px]">
               <img
                 src={deepFakeHero}
                 alt="Deep Fake Detection"
-                className="w-full h-auto object-cover aspect-[16/9]"
+                className="w-full h-auto object-cover aspect-[16/9] max-h-[350px] md:max-h-[400px]"
               />
             </div>
           </div>
 
           {/* Right side - Content */}
-          <div className="w-full md:w-1/2 text-center md:text-left flex flex-col gap-6">
+          <div className="w-full md:w-1/2 flex flex-col justify-center items-center md:items-start text-center md:text-left gap-6">
             <h1 className="text-4xl md:text-5xl font-bold">
               <span className={isDarkMode ? "text-white" : "text-gray-800"}>True</span>{' '}
               <span className="text-[#097F4D]">Vision</span>
