@@ -64,14 +64,14 @@ const Contact: React.FC = () => {
             <main className="flex-grow flex items-center justify-center p-6">
                 <div className="container flex flex-col items-center max-w-6xl mx-auto gap-12">
                     {/* Team Members Row */}
-                    <div className="w-full flex flex-row flex-wrap justify-center gap-6">
+                    <div className="w-full flex flex-row flex-wrap justify-center gap-8">
                         {teamMembers.map((member, index) => (
-                            <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-4 shadow-lg flex flex-col items-center min-w-[180px] max-w-[200px]`}>
-                                <div className="aspect-square w-28 mb-3 overflow-hidden rounded-full border-2 border-[#097F4D]">
+                            <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-8 shadow-lg flex flex-col items-center flex-1 min-w-[260px]`}>
+                                <div className="rounded-lg overflow-hidden bg-black w-full max-w-[320px] aspect-square flex items-center justify-center mb-6">
                                     <img
                                         src={member.image}
                                         alt={member.name}
-                                        className="w-full h-full object-cover"
+                                        className="w-full h-auto object-cover aspect-square"
                                     />
                                 </div>
                                 <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{member.name}</h3>
@@ -101,7 +101,7 @@ const Contact: React.FC = () => {
             </main>
 
             {/* Footer */}
-            <footer className="p-6">
+            <footer className="p-4">
                 <div className="flex justify-center gap-4 text-sm">
                     <Link to="/privacy-policy" className="text-[#097F4D] hover:text-[#076b41]">
                         Privacy Policy
