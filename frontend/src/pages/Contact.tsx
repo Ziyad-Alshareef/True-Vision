@@ -66,14 +66,14 @@ const Contact: React.FC = () => {
             <main className="flex-grow flex items-center justify-center p-6">
                 <div className="container flex flex-col items-center max-w-6xl mx-auto gap-12">
                     {/* Team Members Row */}
-                    <div className="w-full flex flex-row flex-wrap justify-center gap-8">
+                    <div className="w-full grid grid-cols-1 md:grid-cols-4 gap-8">
                         {teamMembers.map((member, index) => (
-                            <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-8 shadow-lg flex flex-col items-center flex-1 min-w-[260px]`}>
-                                <div className="rounded-lg overflow-hidden bg-black w-full max-w-[320px] aspect-square flex items-center justify-center mb-6">
+                            <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-8 shadow-lg flex flex-col items-center w-full`}>
+                                <div className="rounded-lg overflow-hidden bg-black w-full aspect-square flex items-center justify-center mb-6">
                                     <img
                                         src={member.image}
                                         alt={member.name}
-                                        className="w-full h-auto object-cover aspect-square"
+                                        className="w-full h-full object-cover"
                                     />
                                 </div>
                                 <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{member.name}</h3>
