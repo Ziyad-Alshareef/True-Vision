@@ -1,23 +1,39 @@
 
-Terminal 1:
 
-    {try for the environment "env/scripts/activate"
-        if not working, then try:
-            """
-            pip install virtualenv
-            virtualenv env1
-            env1/scripts/activate
-            """
-    }
+python -m venv venv
 
-    cd mawaqef_v3
-    cd backend
-    pip install -r requirements.txt
-    python manage.py runserver
-    
-Terminal 2:
-    cd mawaqef_v3
-    cd frontend
-    npm install
-    npm run dev
+venv\Scripts\activate
 
+pip install -r requirements.txt
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+pip check
+
+
+
+pip freeze > requirements.txt
