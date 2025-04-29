@@ -66,6 +66,18 @@ const Contact: React.FC = () => {
             {/* Main Content */}
             <main className="flex-grow flex items-center justify-center p-6">
                 <div className="container flex flex-col items-center max-w-6xl mx-auto gap-12">
+                    {/* Page Title and Description */}
+                    <div className="w-full text-center flex flex-col gap-6">
+                        <h1 className="text-6xl md:text-7xl font-bold">
+                            <span className={isDarkMode ? "text-white" : "text-gray-800"}>Contact</span>{' '}
+                            <span className="text-[#097F4D]">Us</span>
+                        </h1>
+
+                        <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
+                            Get to know the talented individuals behind True Vision. Connect with us for any inquiries or collaborations!
+                        </p>
+                    </div>
+
                     {/* Team Members Row */}
                     <div className="profile-grid">
                         {teamMembers.map((member, index) => (
@@ -91,17 +103,6 @@ const Contact: React.FC = () => {
                                 </a>
                             </div>
                         ))}
-                    </div>
-                    {/* Page Title and Description */}
-                    <div className="w-full text-center flex flex-col gap-6 mt-8">
-                        <h1 className="text-6xl md:text-7xl font-bold">
-                            <span className={isDarkMode ? "text-white" : "text-gray-800"}>Contact</span>{' '}
-                            <span className="text-[#097F4D]">Us</span>
-                        </h1>
-
-                        <p className={`${isDarkMode ? "text-gray-400" : "text-gray-600"} text-lg`}>
-                            Get to know the talented individuals behind True Vision. Connect with us for any inquiries or collaborations!
-                        </p>
                     </div>
                 </div>
             </main>
