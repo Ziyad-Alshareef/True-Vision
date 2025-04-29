@@ -11,14 +11,14 @@ import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
 
 interface FormData {
-    username: string;
-    password: string;
-  }
-  
+  username: string;
+  password: string;
+}
+
 interface LoginResponse {
-    access: string;
-    refresh: string;
-  }
+  access: string;
+  refresh: string;
+}
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -27,47 +27,48 @@ export const Login = () => {
     username: '',
     password: ''
   });
-  
+
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: Implement actual login logic
     try {
-        const response = await api.post<LoginResponse>('/api/token/', formData);
-        if (response.status === 200) {
-          const data = response.data;
-          localStorage.setItem('access', data.access);
-          localStorage.setItem('refresh', data.refresh);
-          login();
-          navigate('/dashboard');
-        }
-      } catch (error) {
-        console.error('Login error:', error);
+      const response = await api.post<LoginResponse>('/api/token/', formData);
+      if (response.status === 200) {
+        const data = response.data;
+        localStorage.setItem('access', data.access);
+        localStorage.setItem('refresh', data.refresh);
+        login();
+        navigate('/dashboard');
       }
+    } catch (error) {
+      console.error('Login error:', error);
+    }
   };
 
   return (
-    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 relative overflow-hidden ${
-      isTransitioning ? 'theme-transitioning' : ''
-    }`}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 relative overflow-hidden ${isTransitioning ? 'theme-transitioning' : ''
+      }`}>
       {/* Theme Toggle Button - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
       </div>
-    
+
       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
       <div className="w-full max-w-md space-y-8 relative z-10">
         <div className="text-center">
-          <img
-            src={isDarkMode ? whiteLogo : darkLogo}
-            alt="True Vision Logo"
-            className="mx-auto w-21 h-21 mb-8"
-          />
+          <Link to="/">
+            <img
+              src={isDarkMode ? whiteLogo : darkLogo}
+              alt="True Vision Logo"
+              className="mx-auto w-21 h-21 mb-8"
+            />
+          </Link>
           <h1 className={`text-3xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-2`}>Welcome back</h1>
-          
+
           <h2 className={`mt-4 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Sign in</h2>
         </div>
 

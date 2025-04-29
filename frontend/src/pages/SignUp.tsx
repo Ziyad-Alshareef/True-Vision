@@ -16,13 +16,13 @@ interface FormData {
 }
 
 export const SignUp = () => {
-    const [formData, setFormData] = useState<FormData>({
-        username: '',
-        email: '',
-        password: ''
-    });
-    const navigate = useNavigate();
-    const { isDarkMode, isTransitioning } = useTheme();
+  const [formData, setFormData] = useState<FormData>({
+    username: '',
+    email: '',
+    password: ''
+  });
+  const navigate = useNavigate();
+  const { isDarkMode, isTransitioning } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,25 +37,26 @@ export const SignUp = () => {
   };
 
   return (
-    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 ${
-      isTransitioning ? 'theme-transitioning' : ''
-    }`}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 ${isTransitioning ? 'theme-transitioning' : ''
+      }`}>
       {/* Theme Toggle Button - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
       </div>
-    
+
       <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
         <GreenCircle />
       </div>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          
-          <img
-            src={isDarkMode ? whiteLogo : darkLogo}
-            alt="True Vision Logo"
-            className="mx-auto w-21 h-21 mb-8"
-          />
+
+          <Link to="/">
+            <img
+              src={isDarkMode ? whiteLogo : darkLogo}
+              alt="True Vision Logo"
+              className="mx-auto w-21 h-21 mb-8"
+            />
+          </Link>
           <h1 className={`text-3xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-2`}>
             Welcome to <span className="text-[#097F4D]">True Vision</span>
           </h1>
