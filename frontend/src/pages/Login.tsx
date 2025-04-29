@@ -16,6 +16,11 @@ interface FormData {
   password: string;
 }
 
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
 interface LoginResponse {
   access: string;
   refresh: string;
@@ -28,12 +33,36 @@ export const Login = () => {
     username: '',
     password: ''
   });
-
+  const [errors, setErrors] = useState<ValidationError[]>([]);
   const { login } = useAuth();
+
+  const validateForm = (): boolean => {
+    const newErrors: ValidationError[] = [];
+
+    // Username validation
+    if (formData.username.length > 50) {
+      newErrors.push({ field: 'username', message: 'Username cannot exceed 50 characters' });
+    }
+    if (formData.username.length === 0) {
+      newErrors.push({ field: 'username', message: 'Username is required' });
+    }
+
+    // Password validation
+    if (formData.password.length > 50) {
+      newErrors.push({ field: 'password', message: 'Password cannot exceed 50 characters' });
+    }
+    if (formData.password.length === 0) {
+      newErrors.push({ field: 'password', message: 'Password is required' });
+    }
+
+    setErrors(newErrors);
+    return newErrors.length === 0;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement actual login logic
+    if (!validateForm()) return;
+
     try {
       const response = await api.post<LoginResponse>('/api/token/', formData);
       if (response.status === 200) {
@@ -45,12 +74,16 @@ export const Login = () => {
       }
     } catch (error) {
       console.error('Login error:', error);
+      setErrors([{ field: 'general', message: 'Invalid username or password' }]);
     }
   };
 
+  const getErrorForField = (field: string): string | undefined => {
+    return errors.find(error => error.field === field)?.message;
+  };
+
   return (
-    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 relative overflow-hidden ${isTransitioning ? 'theme-transitioning' : ''
-      }`}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 relative overflow-hidden ${isTransitioning ? 'theme-transitioning' : ''}`}>
       {/* Theme Toggle Button - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
@@ -73,6 +106,12 @@ export const Login = () => {
           <h2 className={`mt-4 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Sign in</h2>
         </div>
 
+        {getErrorForField('general') && (
+          <div className="p-4 bg-red-100 text-red-700 rounded-lg">
+            {getErrorForField('general')}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-4">
             <div>
@@ -82,7 +121,11 @@ export const Login = () => {
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                maxLength={50}
               />
+              {getErrorForField('username') && (
+                <p className="text-red-500 text-sm mt-1">{getErrorForField('username')}</p>
+              )}
             </div>
             <div>
               <Input
@@ -91,7 +134,11 @@ export const Login = () => {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                maxLength={50}
               />
+              {getErrorForField('password') && (
+                <p className="text-red-500 text-sm mt-1">{getErrorForField('password')}</p>
+              )}
             </div>
           </div>
 
@@ -127,88 +174,4 @@ export const Login = () => {
 };
 
 export default Login;
-/*import React, { useState, FormEvent } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import api from "../api";
-import { useAuth } from '../context/AuthContext';
-
-interface FormData {
-  username: string;
-  password: string;
-}
-
-interface LoginResponse {
-  access: string;
-  refresh: string;
-}
-
-const Login: React.FC = () => {
-  const [formData, setFormData] = useState<FormData>({
-    username: '',
-    password: ''
-  });
-  const navigate = useNavigate();
-  const { login } = useAuth();
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      const response = await api.post<LoginResponse>('/api/token/', formData);
-      if (response.status === 200) {
-        const data = response.data;
-        localStorage.setItem('access', data.access);
-        localStorage.setItem('refresh', data.refresh);
-        login();
-        navigate('/dashboard');
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-    }
-  };
-
-  return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg">
-      <h2 className="text-2xl font-bold mb-6 text-white">Sign in</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <input
-            type="text"
-            placeholder="Username"
-            className="w-full p-2 rounded bg-gray-700 text-white"
-            value={formData.username}
-            onChange={(e) => setFormData({...formData, username: e.target.value})}
-          />
-        </div>
-        <div className="mb-4">
-          <input
-            type="password"
-            placeholder="Password"
-            className="w-full p-2 rounded bg-gray-700 text-white"
-            value={formData.password}
-            onChange={(e) => setFormData({...formData, password: e.target.value})}
-          />
-        </div>
-        <button
-          type="submit"
-          className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
-        >
-          Login
-        </button>
-      </form>
-      <div className="mt-4 text-center text-gray-400">
-        <Link to="/reset-password" className="hover:text-green-500">
-          Forgot Password?
-        </Link>
-      </div>
-      <div className="mt-4 text-center text-gray-400">
-        Don't have an account?{' '}
-        <Link to="/signup" className="text-green-500 hover:text-green-400">
-          Sign Up
-        </Link>
-      </div>
-    </div>
-  );
-};
-
-export default Login; */
 
