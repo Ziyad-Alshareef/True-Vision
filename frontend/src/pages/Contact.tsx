@@ -10,6 +10,7 @@ import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { FaLinkedin } from 'react-icons/fa';
+import './Contact.css';
 
 // Team member data
 const teamMembers = [
@@ -68,20 +69,22 @@ const Contact: React.FC = () => {
                     {/* Team Members Row */}
                     <div className="w-full grid grid-cols-1 md:grid-cols-4 gap-8">
                         {teamMembers.map((member, index) => (
-                            <div key={index} className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} rounded-lg p-8 shadow-lg flex flex-col items-center w-full`}>
-                                <div className="rounded-lg overflow-hidden bg-black w-full aspect-square flex items-center justify-center mb-6">
+                            <div key={index} className={`profile-card ${isDarkMode ? 'bg-neutral-900' : 'bg-white'}`}>
+                                <div className="profile-image-container">
                                     <img
                                         src={member.image}
                                         alt={member.name}
-                                        className="w-full h-full object-cover"
+                                        className="profile-image"
                                     />
                                 </div>
-                                <h3 className={`text-lg font-semibold mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>{member.name}</h3>
+                                <h3 className={`profile-name ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+                                    {member.name}
+                                </h3>
                                 <a
                                     href={member.linkedin}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-2 text-[#097F4D] hover:text-[#076b41] transition-colors text-sm"
+                                    className="profile-link text-[#097F4D] hover:text-[#076b41]"
                                 >
                                     <FaLinkedin className="text-lg" />
                                     <span>LinkedIn</span>
