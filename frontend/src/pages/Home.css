@@ -1,9 +1,21 @@
-.hero-image-wrapper {
+.hero-section {
     width: 100%;
+    max-width: 6xl;
+    margin: 0 auto;
+    padding: 0 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3rem;
+}
+
+.hero-image-wrapper {
+    flex: 1;
+    min-width: 300px;
     max-width: 50%;
     display: flex;
     justify-content: center;
-    align-items: center;
 }
 
 .hero-image-container {
@@ -29,13 +41,31 @@
     display: block;
 }
 
+.hero-content {
+    flex: 1;
+    min-width: 300px;
+    max-width: 50%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 1.5rem;
+}
+
 @media (max-width: 768px) {
-    .hero-image-wrapper {
-        max-width: 100%;
-        padding: 0 1rem;
+    .hero-section {
+        flex-direction: column;
+        gap: 2rem;
     }
 
-    .hero-image-container {
+    .hero-image-wrapper,
+    .hero-content {
         max-width: 100%;
+        min-width: 100%;
+    }
+
+    .hero-content {
+        align-items: center;
+        text-align: center;
     }
 }
