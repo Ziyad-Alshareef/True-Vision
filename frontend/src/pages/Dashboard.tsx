@@ -616,26 +616,25 @@ export const Dashboard = (): JSX.Element => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:static w-[300px] min-h-screen ${isDarkMode ? 'bg-[#222222] text-neutral-200' : 'bg-white text-gray-800'} p-4 flex flex-col border-r border-solid ${isDarkMode ? 'border-[#ffffff26]' : 'border-gray-200'} transition-transform duration-300 ease-in-out z-50 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-          }`}
+        className={`fixed lg:static w-[320px] min-h-screen ${isDarkMode ? 'bg-[#222222] text-neutral-200' : 'bg-white text-gray-800'} flex flex-col border-r border-solid ${isDarkMode ? 'border-[#ffffff26]' : 'border-gray-200'} transition-transform duration-300 ease-in-out z-50 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
       >
-        <div className="flex flex-col h-full">
-          {/* User Profile */}
-          <div className="mb-6">
-            <Card className={`${isDarkMode ? 'bg-[#ffffff0d]' : 'bg-gray-50'} border-none`}>
-              <CardContent className="flex items-center gap-3 p-3">
-                <img
-                  src={logo}
-                  alt="True Vision Logo"
-                  className="h-[40px] w-auto"
-                />
-                <span className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} font-medium`}>My Dashboard</span>
-              </CardContent>
-            </Card>
-          </div>
+        {/* Header */}
+        <div className="p-4 pb-2">
+          <Card className={`${isDarkMode ? 'bg-[#ffffff0d]' : 'bg-gray-50'} border-none`}>
+            <CardContent className="flex items-center gap-3 p-3 pl-14 lg:pl-3">
+              <img
+                src={logo}
+                alt="True Vision Logo"
+                className="h-[40px] w-auto"
+              />
+              <span className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} font-medium`}>My Dashboard</span>
+            </CardContent>
+          </Card>
+        </div>
 
-          {/* Results List */}
-          <div className="flex-1 overflow-y-auto">
+        {/* Results List - Scrollable */}
+        <div className="flex-1 overflow-hidden px-3">
+          <div className="h-full overflow-y-auto px-0.5">
             {isLoading ? (
               <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} text-center py-4`}>Loading your analyses...</p>
             ) : error ? (
@@ -643,37 +642,53 @@ export const Dashboard = (): JSX.Element => {
             ) : analyses.length === 0 ? (
               <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} text-center py-4`}>No analyses found. Start a new detection.</p>
             ) : (
-              analyses.map((item) => (
-                <div key={item.id} className="mb-2 flex">
-                  <Card
-                    className={`flex-grow ${isDarkMode ? 'bg-[#ffffff0d]' : 'bg-gray-50'} border-none cursor-pointer ${selectedResult === item.id ? 'ring-2 ring-[#097F4D]' : ''
-                      }`}
-                    onClick={() => {
-                      handleResultClick(item.id);
-                      setIsSidebarOpen(false);
-                    }}
-                  >
-                    <CardContent className="flex items-center p-3">
-                      <span className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>Result#{item.id}</span>
-                    </CardContent>
-                  </Card>
-                  <Button
-                    variant="ghost"
-                    className={`ml-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} hover:text-red-500`}
-                    onClick={() => handleDelete(item.id)}
-                  >
-                    <TrashIcon className="h-5 w-5" />
-                  </Button>
-                </div>
-              ))
+              <div className="space-y-2 py-2">
+                {analyses.map((item) => (
+                  <div key={item.id} className="flex items-center gap-1.5 mx-0.5">
+                    <Card
+                      className={`flex-grow ${isDarkMode ? 'bg-[#ffffff0d]' : 'bg-gray-50'} border-none cursor-pointer transition-all duration-200 ${selectedResult === item.id
+                        ? 'ring-1 ring-[#097F4D] ring-inset bg-opacity-100'
+                        : 'hover:bg-[#097F4D] hover:bg-opacity-10'
+                        }`}
+                      onClick={() => handleResultClick(item.id)}
+                    >
+                      <CardContent className="flex items-center justify-between p-2">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${item.result?.is_fake ? 'bg-red-500' : 'bg-green-500'}`} />
+                          <span className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>Result #{item.id}</span>
+                        </div>
+                        <span className={`text-sm ${isDarkMode ? 'text-neutral-400' : 'text-gray-500'}`}>
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </span>
+                      </CardContent>
+                    </Card>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} hover:text-red-500 flex-shrink-0 transition-colors duration-200`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(item.id);
+                      }}
+                    >
+                      <TrashIcon className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
+        </div>
 
+        {/* Bottom Actions - Fixed */}
+        <div className="p-4 pt-2">
           {/* New Detection Button */}
           <Button
-            className="w-full bg-[#097F4D] hover:bg-[#076b41] text-white mb-6"
+            className="w-full bg-[#097F4D] hover:bg-[#076b41] text-white mb-4"
             onClick={() => {
               setShowDetection(true);
+              setSelectedResult(null);
+              setSelectedImage(null);
               setIsSidebarOpen(false);
             }}
           >
@@ -681,52 +696,50 @@ export const Dashboard = (): JSX.Element => {
             Start a new detection
           </Button>
 
-          {/* Bottom Actions */}
-          <div className="mt-auto">
-            <Separator className={`my-4 ${isDarkMode ? 'bg-[#ffffff26]' : 'bg-gray-200'}`} />
-            <Button
-              variant="ghost"
-              className={`w-full justify-start ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} mb-2`}
-              onClick={async () => {
-                try {
-                  await api.delete('/api/analysis/clear/');
-                  setAnalyses([]);
-                  setSelectedResult(null);
-                  setSelectedImage(null);
-                } catch (error) {
-                  console.error("Error clearing analyses:", error);
-                }
-              }}
-            >
-              <TrashIcon className="mr-2 h-5 w-5" />
-              Clear all results
-            </Button>
-            <Button
-              variant="ghost"
-              className={`w-full justify-start ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} mb-2`}
-              onClick={toggleTheme}
-            >
-              {isDarkMode ? (
-                <>
-                  <SunIcon className="mr-2 h-5 w-5" />
-                  Switch to Light Mode
-                </>
-              ) : (
-                <>
-                  <MoonIcon className="mr-2 h-5 w-5" />
-                  Switch to Dark Mode
-                </>
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              className="w-full justify-start text-red-500"
-              onClick={handleLogout}
-            >
-              <LogOutIcon className="mr-2 h-5 w-5" />
-              Log out
-            </Button>
-          </div>
+          <Separator className={`my-4 ${isDarkMode ? 'bg-[#ffffff26]' : 'bg-gray-200'}`} />
+
+          <Button
+            variant="ghost"
+            className={`w-full justify-start ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} mb-2`}
+            onClick={async () => {
+              try {
+                await api.delete('/api/analysis/clear/');
+                setAnalyses([]);
+                setSelectedResult(null);
+                setSelectedImage(null);
+              } catch (error) {
+                console.error("Error clearing analyses:", error);
+              }
+            }}
+          >
+            <TrashIcon className="mr-2 h-5 w-5" />
+            Clear all results
+          </Button>
+          <Button
+            variant="ghost"
+            className={`w-full justify-start ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} mb-2`}
+            onClick={toggleTheme}
+          >
+            {isDarkMode ? (
+              <>
+                <SunIcon className="mr-2 h-5 w-5" />
+                Switch to Light Mode
+              </>
+            ) : (
+              <>
+                <MoonIcon className="mr-2 h-5 w-5" />
+                Switch to Dark Mode
+              </>
+            )}
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-red-500"
+            onClick={handleLogout}
+          >
+            <LogOutIcon className="mr-2 h-5 w-5" />
+            Log out
+          </Button>
         </div>
       </aside>
 
