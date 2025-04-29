@@ -608,7 +608,7 @@ export const Dashboard = (): JSX.Element => {
 
       {/* Mobile Menu Toggle Button */}
       <Button
-        className={`fixed top-4 left-4 z-[100] lg:hidden ${isDarkMode ? 'bg-[#333333] text-white' : 'bg-white text-gray-800'}`}
+        className={`fixed top-4 left-4 z-[100] block lg:hidden ${isDarkMode ? 'bg-[#333333] text-white' : 'bg-white text-gray-800'}`}
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
       >
         {isSidebarOpen ? <XIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
@@ -616,7 +616,7 @@ export const Dashboard = (): JSX.Element => {
 
       {/* Sidebar */}
       <aside
-        className={`fixed lg:relative w-[300px] min-h-screen ${isDarkMode ? 'bg-[#222222] text-neutral-200' : 'bg-white text-gray-800'} p-4 flex flex-col border-r border-solid ${isDarkMode ? 'border-[#ffffff26]' : 'border-gray-200'} transition-transform duration-300 ease-in-out z-50 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        className={`fixed lg:static w-[300px] min-h-screen ${isDarkMode ? 'bg-[#222222] text-neutral-200' : 'bg-white text-gray-800'} p-4 flex flex-col border-r border-solid ${isDarkMode ? 'border-[#ffffff26]' : 'border-gray-200'} transition-transform duration-300 ease-in-out z-50 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
           }`}
       >
         <div className="flex flex-col h-full">
