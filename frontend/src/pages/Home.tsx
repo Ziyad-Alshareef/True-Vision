@@ -7,6 +7,7 @@ import deepFakeHero from "./assets/deep-fake-hero.png";
 import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
+import './Home.css';
 
 export const Home = () => {
   const { isDarkMode, isTransitioning } = useTheme();
@@ -40,12 +41,12 @@ export const Home = () => {
         <div className="w-full max-w-6xl mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-12">
             {/* Left side - Image */}
-            <div className="w-full md:w-1/2 flex justify-center">
-              <div className="relative w-full max-w-3xl rounded-lg overflow-hidden bg-black">
+            <div className="hero-image-wrapper">
+              <div className="hero-image-container">
                 <img
                   src={deepFakeHero}
                   alt="Deep Fake Detection"
-                  className="w-full h-auto object-contain max-w-full"
+                  className="hero-image"
                 />
               </div>
             </div>
