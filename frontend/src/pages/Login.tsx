@@ -9,6 +9,7 @@ import api from "../api";
 import whiteLogo from "./assets/whitefont-transpa.png";
 import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
+import './Auth.css';
 
 interface FormData {
   username: string;
@@ -102,7 +103,7 @@ export const Login = () => {
 
           <Button
             type="submit"
-            className="w-full bg-[#097F4D] hover:bg-[#076b41] text-white"
+            className="auth-button"
           >
             Login
           </Button>

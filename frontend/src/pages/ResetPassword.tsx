@@ -8,6 +8,7 @@ import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
+import './Auth.css';
 
 export const ResetPassword = () => {
   const [email, setEmail] = useState('');
@@ -72,7 +73,7 @@ export const ResetPassword = () => {
 
           <Button
             type="submit"
-            className="w-full bg-[#097F4D] hover:bg-[#076b41] text-white"
+            className="auth-button"
           >
             Reset password
           </Button>

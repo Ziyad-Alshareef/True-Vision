@@ -8,6 +8,7 @@ import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import api from "../api";
+import './Auth.css';
 
 interface FormData {
   username: string;
@@ -96,7 +97,7 @@ export const SignUp = () => {
 
           <Button
             type="submit"
-            className="w-full bg-[#097F4D] hover:bg-[#076b41] text-white"
+            className="auth-button"
           >
             Sign up
           </Button>
