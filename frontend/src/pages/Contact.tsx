@@ -67,7 +67,7 @@ const Contact: React.FC = () => {
             <main className="flex-grow flex items-center justify-center p-6">
                 <div className="container flex flex-col items-center max-w-6xl mx-auto gap-12">
                     {/* Team Members Row */}
-                    <div className="w-full grid grid-cols-1 md:grid-cols-4 gap-8">
+                    <div className="profile-grid">
                         {teamMembers.map((member, index) => (
                             <div key={index} className={`profile-card ${isDarkMode ? 'bg-neutral-900' : 'bg-white'}`}>
                                 <div className="profile-image-container">

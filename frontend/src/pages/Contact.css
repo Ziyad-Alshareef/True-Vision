@@ -1,3 +1,11 @@
+.profile-grid {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 2rem;
+    padding: 0 1rem;
+}
+
 .profile-card {
     width: 100%;
     max-width: 300px;
@@ -40,6 +48,11 @@
 }
 
 @media (max-width: 768px) {
+    .profile-grid {
+        grid-template-columns: 1fr;
+        gap: 1.5rem;
+    }
+
     .profile-card {
         max-width: 100%;
         padding: 1.5rem;
