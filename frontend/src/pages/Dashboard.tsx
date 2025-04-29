@@ -8,16 +8,17 @@ import {
   MenuIcon,
   XIcon,
 } from "lucide-react";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "../components/ui/button";
-import { Card, CardContent } from "../components/ui/card";
+import { Card } from "../components/ui/card";
 import { Separator } from "../components/ui/separator";
 import { Detection } from "./Detection";
 import api from "../api";
 import logo from "./assets/logo-transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
+import './Dashboard.css';
 import {
   Dialog,
   DialogContent,
@@ -29,6 +30,12 @@ import {
 
 // Add this constant for API base URL (since importing it directly has issues)
 const API_BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : "/choreo-apis/awbo/backend/rest-api-be2/v1.0";
+
+// Define location state interface
+interface LocationState {
+  signedThumbnailUrl?: string;
+  lastUploadedVideoId?: string;
+}
 
 // Define the analysis interface
 interface Analysis {
@@ -56,9 +63,157 @@ const formatUrl = (baseUrl: string, path: string): string => {
   return `${cleanBase}/${cleanPath}`;
 };
 
+// Add helper functions for thumbnail handling
+const getS3KeyFromUrl = (url: string): string | null => {
+  if (!url) return null;
+
+  // Remove any query parameters first (everything after '?')
+  const baseUrl = url.split('?')[0];
+
+  // For URLs like https://true-vision.s3.amazonaws.com/media/thumbnails/placeholder_1.jpg
+  if (baseUrl.includes('amazonaws.com')) {
+    const parts = baseUrl.split('amazonaws.com/');
+    if (parts.length > 1) {
+      return parts[1];
+    }
+  }
+
+  // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
+  if (baseUrl.startsWith('media/')) {
+    return baseUrl;
+  }
+
+  // For Django media URLs like /media/thumbnails/placeholder_1.jpg
+  if (baseUrl.startsWith('/media/')) {
+    return baseUrl.substring(1); // Remove leading slash
+  }
+
+  // If it contains thumbnail or placeholder in the path
+  if (baseUrl.includes('thumbnail_') || baseUrl.includes('placeholder_')) {
+    // Extract just the filename
+    const filename = baseUrl.split('/').pop();
+    if (filename) {
+      // Try to extract video ID from filename
+      const match = filename.match(/(?:thumbnail|placeholder)_(\d+)\.jpg$/);
+      if (match && match[1]) {
+        const videoId = match[1];
+        return `media/thumbnails/${filename}`;
+      }
+      return `media/thumbnails/${filename}`;
+    }
+  }
+
+  return null;
+};
+
+const getSignedUrl = async (s3Key: string): Promise<string | null> => {
+  try {
+    // Remove any query parameters first (everything after '?')
+    const cleanKey = s3Key.split('?')[0];
+
+    console.log(`Getting signed URL for clean key: ${cleanKey}`);
+
+    // First try the /s3/signed-url/ endpoint (which should be in the updated API)
+    try {
+      const response = await api.get(`/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
+      if (response.status === 200 && response.data && response.data.signed_url) {
+        console.log(`Got signed URL for ${cleanKey}:`, response.data.signed_url);
+        return response.data.signed_url;
+      }
+    } catch (newEndpointError) {
+      console.log('New endpoint not available, trying legacy endpoint');
+      // Fall back to legacy endpoint
+      const legacyResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
+      if (legacyResponse.status === 200 && legacyResponse.data && legacyResponse.data.signed_url) {
+        console.log(`Got signed URL from legacy endpoint for ${cleanKey}:`, legacyResponse.data.signed_url);
+        return legacyResponse.data.signed_url;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting signed URL:', error);
+    return null;
+  }
+};
+
+// Add a function to check if endpoints are available on the backend
+const checkEndpointAvailability = (() => {
+  // Cache the availability status
+  const availabilityCache: Record<string, boolean> = {};
+
+  // Return a function that checks availability
+  return async (endpoint: string): Promise<boolean> => {
+    // Return from cache if already checked
+    if (availabilityCache.hasOwnProperty(endpoint)) {
+      return availabilityCache[endpoint];
+    }
+
+    try {
+      // Try a HEAD request to check if endpoint exists
+      const response = await api.head(endpoint);
+      availabilityCache[endpoint] = response.status < 400;
+      return availabilityCache[endpoint];
+    } catch (error) {
+      console.log(`Endpoint ${endpoint} not available:`, error);
+      availabilityCache[endpoint] = false;
+      return false;
+    }
+  };
+})();
+
+// Fix the checkS3ObjectExists function to handle nullable signedUrl correctly
+const checkS3ObjectExists = async (key: string): Promise<{ exists: boolean, alternateKey?: string, signedUrl?: string }> => {
+  try {
+    // First check if the endpoint is available
+    const isEndpointAvailable = await checkEndpointAvailability('/s3/object-exists/');
+
+    if (!isEndpointAvailable) {
+      console.log('S3 object-exists endpoint not available, using direct signed URL');
+      try {
+        // Fall back to getting a signed URL directly
+        const directSignedUrl = await getSignedUrl(key);
+        return {
+          exists: !!directSignedUrl,
+          signedUrl: directSignedUrl || undefined  // Convert null to undefined
+        };
+      } catch (signedUrlError) {
+        console.error('Error getting signed URL:', signedUrlError);
+        return { exists: false };
+      }
+    }
+
+    // If endpoint is available, use it
+    const response = await api.get(`/s3/object-exists/?key=${encodeURIComponent(key)}`);
+    if (response.status === 200) {
+      console.log(`Object exists check for ${key}:`, response.data);
+      return {
+        exists: response.data.exists,
+        alternateKey: response.data.alternate_key,
+        signedUrl: response.data.signed_url
+      };
+    }
+    return { exists: false };
+  } catch (error) {
+    console.error('Error checking if S3 object exists:', error);
+    try {
+      // Fall back to getting a signed URL directly
+      const directSignedUrl = await getSignedUrl(key);
+      return {
+        exists: !!directSignedUrl,
+        signedUrl: directSignedUrl || undefined  // Convert null to undefined
+      };
+    } catch (signedUrlError) {
+      console.error('Error getting fallback signed URL:', signedUrlError);
+      return { exists: false };
+    }
+  }
+};
+
 export const Dashboard = (): JSX.Element => {
   const navigate = useNavigate();
   const location = useLocation();
+  const locationState = location.state as LocationState;
   const { isDarkMode, toggleTheme } = useTheme();
   const [selectedResult, setSelectedResult] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -68,158 +223,12 @@ export const Dashboard = (): JSX.Element => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
+  const [isNoResultsDialogOpen, setIsNoResultsDialogOpen] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(false);
 
-  // Update getS3KeyFromUrl to be more forgiving
-  const getS3KeyFromUrl = (url: string): string | null => {
-    if (!url) return null;
-
-    // Remove any query parameters first (everything after '?')
-    const baseUrl = url.split('?')[0];
-
-    // For URLs like https://true-vision.s3.amazonaws.com/media/thumbnails/placeholder_1.jpg
-    if (baseUrl.includes('amazonaws.com')) {
-      const parts = baseUrl.split('amazonaws.com/');
-      if (parts.length > 1) {
-        return parts[1];
-      }
-    }
-
-    // For URLs that are just keys like media/thumbnails/placeholder_1.jpg
-    if (baseUrl.startsWith('media/')) {
-      return baseUrl;
-    }
-
-    // For Django media URLs like /media/thumbnails/placeholder_1.jpg
-    if (baseUrl.startsWith('/media/')) {
-      return baseUrl.substring(1); // Remove leading slash
-    }
-
-    // If it contains thumbnail or placeholder in the path
-    if (baseUrl.includes('thumbnail_') || baseUrl.includes('placeholder_')) {
-      // Extract just the filename
-      const filename = baseUrl.split('/').pop();
-      if (filename) {
-        // Try to extract video ID from filename
-        const match = filename.match(/(?:thumbnail|placeholder)_(\d+)\.jpg$/);
-        if (match && match[1]) {
-          const videoId = match[1];
-          return `media/thumbnails/${filename}`;
-        }
-        return `media/thumbnails/${filename}`;
-      }
-    }
-
-    return null;
-  };
-
-  // Fix the getSignedUrl function to work with the Heroku deployment
-  const getSignedUrl = async (s3Key: string): Promise<string | null> => {
-    try {
-      // Remove any query parameters first (everything after '?')
-      const cleanKey = s3Key.split('?')[0];
-
-      console.log(`Getting signed URL for clean key: ${cleanKey}`);
-
-      // First try the /s3/signed-url/ endpoint (which should be in the updated API)
-      try {
-        const response = await api.get(`/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
-        if (response.status === 200 && response.data && response.data.signed_url) {
-          console.log(`Got signed URL for ${cleanKey}:`, response.data.signed_url);
-          return response.data.signed_url;
-        }
-      } catch (newEndpointError) {
-        console.log('New endpoint not available, trying legacy endpoint');
-        // Fall back to legacy endpoint
-        const legacyResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
-        if (legacyResponse.status === 200 && legacyResponse.data && legacyResponse.data.signed_url) {
-          console.log(`Got signed URL from legacy endpoint for ${cleanKey}:`, legacyResponse.data.signed_url);
-          return legacyResponse.data.signed_url;
-        }
-      }
-
-      return null;
-    } catch (error) {
-      console.error('Error getting signed URL:', error);
-      return null;
-    }
-  };
-
-  // Add a function to check if endpoints are available on the backend
-  const checkEndpointAvailability = (() => {
-    // Cache the availability status
-    const availabilityCache: Record<string, boolean> = {};
-
-    // Return a function that checks availability
-    return async (endpoint: string): Promise<boolean> => {
-      // Return from cache if already checked
-      if (availabilityCache.hasOwnProperty(endpoint)) {
-        return availabilityCache[endpoint];
-      }
-
-      try {
-        // Try a HEAD request to check if endpoint exists
-        const response = await api.head(endpoint);
-        availabilityCache[endpoint] = response.status < 400;
-        return availabilityCache[endpoint];
-      } catch (error) {
-        console.log(`Endpoint ${endpoint} not available:`, error);
-        availabilityCache[endpoint] = false;
-        return false;
-      }
-    };
-  })();
-
-  // Fix the checkS3ObjectExists function to handle nullable signedUrl correctly
-  const checkS3ObjectExists = async (key: string): Promise<{ exists: boolean, alternateKey?: string, signedUrl?: string }> => {
-    try {
-      // First check if the endpoint is available
-      const isEndpointAvailable = await checkEndpointAvailability('/s3/object-exists/');
-
-      if (!isEndpointAvailable) {
-        console.log('S3 object-exists endpoint not available, using direct signed URL');
-        try {
-          // Fall back to getting a signed URL directly
-          const directSignedUrl = await getSignedUrl(key);
-          return {
-            exists: !!directSignedUrl,
-            signedUrl: directSignedUrl || undefined  // Convert null to undefined
-          };
-        } catch (signedUrlError) {
-          console.error('Error getting signed URL:', signedUrlError);
-          return { exists: false };
-        }
-      }
-
-      // If endpoint is available, use it
-      const response = await api.get(`/s3/object-exists/?key=${encodeURIComponent(key)}`);
-      if (response.status === 200) {
-        console.log(`Object exists check for ${key}:`, response.data);
-        return {
-          exists: response.data.exists,
-          alternateKey: response.data.alternate_key,
-          signedUrl: response.data.signed_url
-        };
-      }
-      return { exists: false };
-    } catch (error) {
-      console.error('Error checking if S3 object exists:', error);
-      try {
-        // Fall back to getting a signed URL directly
-        const directSignedUrl = await getSignedUrl(key);
-        return {
-          exists: !!directSignedUrl,
-          signedUrl: directSignedUrl || undefined  // Convert null to undefined
-        };
-      } catch (signedUrlError) {
-        console.error('Error getting fallback signed URL:', signedUrlError);
-        return { exists: false };
-      }
-    }
-  };
-
-  // Fetch user's analyses
+  // Fetch analyses effect
   useEffect(() => {
-    // Create an async function inside the effect
     const fetchAnalyses = async () => {
       try {
         const token = localStorage.getItem('access');
@@ -231,11 +240,11 @@ export const Dashboard = (): JSX.Element => {
         setIsLoading(true);
 
         // Check if we have a signed thumbnail URL from the upload
-        const signedThumbnailUrl = location.state?.signedThumbnailUrl ||
+        const signedThumbnailUrl = locationState?.signedThumbnailUrl ||
           localStorage.getItem('last_signed_thumbnail_url') ||
           localStorage.getItem('last_api_signed_url');
 
-        const lastUploadedId = location.state?.lastUploadedVideoId ||
+        const lastUploadedId = locationState?.lastUploadedVideoId ||
           localStorage.getItem('last_uploaded_video_id');
 
         if (signedThumbnailUrl && lastUploadedId) {
@@ -406,17 +415,13 @@ export const Dashboard = (): JSX.Element => {
             setSelectedResult(firstAnalysis.id);
 
             if (firstAnalysis.thumbnail_url) {
-              console.log('Setting thumbnail URL:', firstAnalysis.thumbnail_url);
               setSelectedImage(firstAnalysis.thumbnail_url);
             } else {
-              console.log('No thumbnail URL available for first analysis');
-              // Try using a direct placeholder based on video ID
               const videoId = firstAnalysis.result?.video_id;
               if (videoId) {
                 const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
                 const signedUrl = await getSignedUrl(placeholderKey);
                 if (signedUrl) {
-                  console.log('Using signed URL for placeholder:', signedUrl);
                   setSelectedImage(signedUrl);
                 } else {
                   setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
@@ -435,105 +440,53 @@ export const Dashboard = (): JSX.Element => {
       }
     };
 
-    // Call the async function
     fetchAnalyses();
-  }, [navigate, location.state]);
+  }, [navigate, locationState]);
 
-  // Update handleResultClick to use checkS3ObjectExists
+  // Memoize the selected analysis
+  const selectedAnalysis = useMemo(() => {
+    return analyses.find(a => a.id === selectedResult);
+  }, [analyses, selectedResult]);
+
+  // Update handleResultClick to set loading state immediately
   const handleResultClick = async (id: string) => {
-    console.log('Clicked result:', id);
-    const analysis = analyses.find(a => a.id === id);
-    console.log('Found analysis:', analysis);
     setSelectedResult(id);
+    setIsImageLoading(true); // Show spinner immediately
+    const analysis = analyses.find(a => a.id === id);
+    setShowDetection(false);
 
     if (analysis?.thumbnail_url) {
       const s3Key = getS3KeyFromUrl(analysis.thumbnail_url);
-
       if (s3Key) {
-        // Check if the object exists first
         const objectCheck = await checkS3ObjectExists(s3Key);
-
         if (objectCheck.exists || objectCheck.alternateKey) {
-          // Use the provided signed URL directly through our proxy
           if (objectCheck.signedUrl) {
             const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(objectCheck.signedUrl)}`);
-            console.log('Using pre-verified proxy URL:', proxyUrl);
             setSelectedImage(proxyUrl);
-            setShowDetection(false);
             return;
           }
         }
       }
-
-      // Fallback to original behavior if object check fails
       setSelectedImage(analysis.thumbnail_url);
     } else {
-      // Try using a direct placeholder based on video ID
       const videoId = analysis?.result?.video_id;
       if (videoId) {
-        // Check if placeholder exists first
         const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
         const objectCheck = await checkS3ObjectExists(placeholderKey);
-
         if (objectCheck.exists || objectCheck.alternateKey) {
           const finalKey = objectCheck.alternateKey || placeholderKey;
           const signedUrl = objectCheck.signedUrl || await getSignedUrl(finalKey);
-
           if (signedUrl) {
             const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
-            console.log('Using verified placeholder URL through proxy:', proxyUrl);
             setSelectedImage(proxyUrl);
-            setShowDetection(false);
             return;
           }
         }
-
-        // If not found, fall back to placeholder
         setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
       } else {
         setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
       }
     }
-
-    setShowDetection(false);
-  };
-
-  const handleDelete = async (id: string) => {
-    setSelectedResult(id);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const confirmDelete = async () => {
-    if (!selectedResult) return;
-
-    try {
-      await api.delete(`/api/analysis/${selectedResult}/`);
-
-      // Remove the deleted analysis from state
-      setAnalyses(analyses.filter(analysis => analysis.id !== selectedResult));
-
-      // Select the first remaining analysis or clear selection
-      if (analyses.length > 1) {
-        const newSelectedId = analyses.find(a => a.id !== selectedResult)?.id || null;
-        setSelectedResult(newSelectedId);
-        const newAnalysis = analyses.find(a => a.id === newSelectedId);
-        setSelectedImage(newAnalysis?.thumbnail_url || null);
-      } else {
-        setSelectedResult(null);
-        setSelectedImage(null);
-      }
-
-      setIsDeleteDialogOpen(false);
-    } catch (error) {
-      console.error("Error deleting analysis:", error);
-      // Show error message to user
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('access');
-    localStorage.removeItem('refresh');
-    navigate('/login');
   };
 
   // Add direct image loading function that bypasses the proxy
@@ -562,117 +515,147 @@ export const Dashboard = (): JSX.Element => {
     });
   };
 
-  // Load an image with a signed URL
-  const loadImageWithSignedUrl = async (imageUrl: string): Promise<string> => {
-    // If it's not an S3 URL, return as is
-    if (!imageUrl.includes('amazonaws') && !imageUrl.includes('/media/')) {
-      return imageUrl;
-    }
-
-    const s3Key = getS3KeyFromUrl(imageUrl);
-    if (!s3Key) {
-      console.warn('Could not extract S3 key from URL:', imageUrl);
-      return imageUrl;
-    }
-
-    console.log('Extracting S3 key:', s3Key);
-    const signedUrl = await getSignedUrl(s3Key);
-    if (!signedUrl) {
-      console.warn('Could not get signed URL for:', s3Key);
-      return imageUrl;
-    }
-
-    return signedUrl;
+  // Handle delete
+  const handleDelete = async (id: string) => {
+    setSelectedResult(id);
+    setIsDeleteDialogOpen(true);
   };
 
-  // Add a new function to verify image URLs
-  const verifyImageUrl = async (url: string): Promise<boolean> => {
+  // Confirm delete
+  const confirmDelete = async () => {
+    if (!selectedResult) return;
+
     try {
-      // Use fetch with HEAD method to check if image exists
-      const response = await fetch(url, {
-        method: 'HEAD',
-        mode: 'no-cors' // Important for cross-origin requests
-      });
-      return true; // If we get here, the image probably exists
+      await api.delete(`/api/analysis/${selectedResult}/`);
+      setAnalyses(analyses.filter((analysis: Analysis) => analysis.id !== selectedResult));
+
+      if (analyses.length > 1) {
+        const newSelectedId = analyses.find((a: Analysis) => a.id !== selectedResult)?.id || null;
+        setSelectedResult(newSelectedId);
+        const newAnalysis = analyses.find((a: Analysis) => a.id === newSelectedId);
+        setSelectedImage(newAnalysis?.thumbnail_url || null);
+      } else {
+        setSelectedResult(null);
+        setSelectedImage(null);
+      }
+
+      setIsDeleteDialogOpen(false);
     } catch (error) {
-      console.error('Error verifying image URL:', error);
-      return false;
+      console.error("Error deleting analysis:", error);
     }
   };
+
+  // Handle logout
+  const handleLogout = () => {
+    localStorage.removeItem('access');
+    localStorage.removeItem('refresh');
+    navigate('/login');
+  };
+
+  // Add effect to handle new analysis selection
+  useEffect(() => {
+    const handleNewAnalysis = async () => {
+      // Check if we're returning from Detection (showDetection is false) and have analyses
+      if (!showDetection && analyses.length > 0) {
+        // Get the most recent analysis (first in the list since they're ordered by date)
+        const latestAnalysis = analyses[0];
+
+        // Set the selected result
+        setSelectedResult(latestAnalysis.id);
+        setIsImageLoading(true);
+
+        // Try to set the thumbnail
+        if (latestAnalysis.thumbnail_url) {
+          const s3Key = getS3KeyFromUrl(latestAnalysis.thumbnail_url);
+          if (s3Key) {
+            const objectCheck = await checkS3ObjectExists(s3Key);
+            if (objectCheck.exists || objectCheck.alternateKey) {
+              if (objectCheck.signedUrl) {
+                const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(objectCheck.signedUrl)}`);
+                setSelectedImage(proxyUrl);
+                return;
+              }
+            }
+          }
+          setSelectedImage(latestAnalysis.thumbnail_url);
+        } else if (latestAnalysis.result?.video_id) {
+          const placeholderKey = `media/thumbnails/placeholder_${latestAnalysis.result.video_id}.jpg`;
+          const objectCheck = await checkS3ObjectExists(placeholderKey);
+          if (objectCheck.exists || objectCheck.alternateKey) {
+            const finalKey = objectCheck.alternateKey || placeholderKey;
+            const signedUrl = objectCheck.signedUrl || await getSignedUrl(finalKey);
+            if (signedUrl) {
+              const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
+              setSelectedImage(proxyUrl);
+              return;
+            }
+          }
+          setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+        }
+      }
+    };
+
+    handleNewAnalysis();
+  }, [analyses, showDetection]); // Depend on analyses and showDetection
 
   return (
-    <div className={`flex min-h-screen w-full ${isDarkMode ? 'bg-[#222222]' : 'bg-gray-50'}`}>
-      <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
+    <div className={`dashboard-container ${!isDarkMode ? 'light' : ''}`}>
+      <div className="green-circle-container">
         <GreenCircle />
       </div>
 
-      {/* Mobile Menu Toggle Button */}
-      <Button
-        className={`fixed top-4 left-4 z-[100] block lg:hidden ${isDarkMode ? 'bg-[#333333] text-white' : 'bg-white text-gray-800'}`}
+      <button
+        className={`menu-toggle ${!isDarkMode ? 'light' : ''}`}
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
       >
         {isSidebarOpen ? <XIcon className="h-5 w-5" /> : <MenuIcon className="h-5 w-5" />}
-      </Button>
+      </button>
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed lg:static w-[320px] min-h-screen ${isDarkMode ? 'bg-[#222222] text-neutral-200' : 'bg-white text-gray-800'} flex flex-col border-r border-solid ${isDarkMode ? 'border-[#ffffff26]' : 'border-gray-200'} transition-transform duration-300 ease-in-out z-50 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
-      >
-        {/* Header */}
-        <div className="p-4 pb-2">
-          <Card className={`${isDarkMode ? 'bg-[#ffffff0d]' : 'bg-gray-50'} border-none`}>
-            <CardContent className="flex items-center gap-3 p-3 pl-14 lg:pl-3">
-              <img
-                src={logo}
-                alt="True Vision Logo"
-                className="h-[40px] w-auto"
-              />
-              <span className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} font-medium`}>My Dashboard</span>
-            </CardContent>
-          </Card>
+      <aside className={`sidebar ${!isDarkMode ? 'light' : ''} ${isSidebarOpen ? 'open' : ''}`}>
+        <div className="header-card">
+          <div className="header-content">
+            <img src={logo} alt="True Vision Logo" className="logo" />
+            <span className={`dashboard-title ${!isDarkMode ? 'light' : ''}`}>
+              My Dashboard
+            </span>
+          </div>
         </div>
 
-        {/* Results List - Scrollable */}
-        <div className="flex-1 overflow-hidden px-3">
-          <div className="h-full overflow-y-auto px-0.5">
+        <div className="results-container">
+          <div className="results-list">
             {isLoading ? (
-              <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} text-center py-4`}>Loading your analyses...</p>
+              <p className={`loading-text ${!isDarkMode ? 'light' : ''}`}>Loading your analyses...</p>
             ) : error ? (
-              <p className="text-red-400 text-center py-4">{error}</p>
+              <p className="error-text">{error}</p>
             ) : analyses.length === 0 ? (
-              <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} text-center py-4`}>No analyses found. Start a new detection.</p>
+              <p className={`empty-text ${!isDarkMode ? 'light' : ''}`}>No analyses found. Start a new detection.</p>
             ) : (
-              <div className="space-y-2 py-2">
+              <div className="results-list">
                 {analyses.map((item) => (
-                  <div key={item.id} className="flex items-center gap-1.5 mx-0.5">
-                    <Card
-                      className={`flex-grow ${isDarkMode ? 'bg-[#ffffff0d]' : 'bg-gray-50'} border-none cursor-pointer transition-all duration-200 ${selectedResult === item.id
-                        ? 'ring-1 ring-[#097F4D] ring-inset bg-opacity-100'
-                        : 'hover:bg-[#097F4D] hover:bg-opacity-10'
-                        }`}
+                  <div key={item.id} className="result-item">
+                    <div
+                      className={`result-card ${!isDarkMode ? 'light' : ''} ${selectedResult === item.id ? 'selected' : ''}`}
                       onClick={() => handleResultClick(item.id)}
                     >
-                      <CardContent className="flex items-center justify-between p-2">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${item.result?.is_fake ? 'bg-red-500' : 'bg-green-500'}`} />
-                          <span className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>Result #{item.id}</span>
+                      <div className="result-content">
+                        <div className="result-info">
+                          <div className={`status-dot ${item.result?.is_fake ? 'fake' : 'real'}`} />
+                          <span className={`result-id ${!isDarkMode ? 'light' : ''}`}>Result #{item.id}</span>
                         </div>
-                        <span className={`text-sm ${isDarkMode ? 'text-neutral-400' : 'text-gray-500'}`}>
+                        <span className="result-date">
                           {new Date(item.created_at).toLocaleDateString()}
                         </span>
-                      </CardContent>
-                    </Card>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className={`${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} hover:text-red-500 flex-shrink-0 transition-colors duration-200`}
+                      </div>
+                    </div>
+                    <button
+                      className={`delete-button ${!isDarkMode ? 'light' : ''}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDelete(item.id);
                       }}
                     >
                       <TrashIcon className="h-4 w-4" />
-                    </Button>
+                    </button>
                   </div>
                 ))}
               </div>
@@ -680,11 +663,9 @@ export const Dashboard = (): JSX.Element => {
           </div>
         </div>
 
-        {/* Bottom Actions - Fixed */}
-        <div className="p-4 pt-2">
-          {/* New Detection Button */}
-          <Button
-            className="w-full bg-[#097F4D] hover:bg-[#076b41] text-white mb-4"
+        <div className="bottom-actions">
+          <button
+            className="new-detection-button"
             onClick={() => {
               setShowDetection(true);
               setSelectedResult(null);
@@ -692,276 +673,235 @@ export const Dashboard = (): JSX.Element => {
               setIsSidebarOpen(false);
             }}
           >
-            <PlusIcon className="mr-2 h-5 w-5" />
+            <PlusIcon className="h-5 w-5" />
             Start a new detection
-          </Button>
+          </button>
 
-          <Separator className={`my-4 ${isDarkMode ? 'bg-[#ffffff26]' : 'bg-gray-200'}`} />
+          <div className={`separator ${!isDarkMode ? 'light' : ''}`} />
 
-          <Button
-            variant="ghost"
-            className={`w-full justify-start ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} mb-2`}
-            onClick={async () => {
-              try {
-                await api.delete('/api/analysis/clear/');
-                setAnalyses([]);
-                setSelectedResult(null);
-                setSelectedImage(null);
-              } catch (error) {
-                console.error("Error clearing analyses:", error);
+          <button
+            className={`action-button ${!isDarkMode ? 'light' : ''}`}
+            onClick={() => {
+              if (analyses.length === 0) {
+                setIsNoResultsDialogOpen(true);
+              } else {
+                setIsClearAllDialogOpen(true);
               }
             }}
           >
-            <TrashIcon className="mr-2 h-5 w-5" />
+            <TrashIcon className="h-5 w-5" />
             Clear all results
-          </Button>
-          <Button
-            variant="ghost"
-            className={`w-full justify-start ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'} mb-2`}
+          </button>
+
+          <button
+            className={`action-button ${!isDarkMode ? 'light' : ''}`}
             onClick={toggleTheme}
           >
             {isDarkMode ? (
               <>
-                <SunIcon className="mr-2 h-5 w-5" />
+                <SunIcon className="h-5 w-5" />
                 Switch to Light Mode
               </>
             ) : (
               <>
-                <MoonIcon className="mr-2 h-5 w-5" />
+                <MoonIcon className="h-5 w-5" />
                 Switch to Dark Mode
               </>
             )}
-          </Button>
-          <Button
-            variant="ghost"
-            className="w-full justify-start text-red-500"
+          </button>
+
+          <button
+            className="logout-button"
             onClick={handleLogout}
           >
-            <LogOutIcon className="mr-2 h-5 w-5" />
+            <LogOutIcon className="h-5 w-5" />
             Log out
-          </Button>
+          </button>
         </div>
       </aside>
 
-      {/* Main Content */}
       {showDetection ? (
-        <Detection />
+        <Detection onAnalysisComplete={() => {
+          setShowDetection(false);
+          // Fetch latest analyses to ensure we have the new one
+          const fetchLatestAnalyses = async () => {
+            try {
+              const analysisResponse = await api.get('/api/analysis/');
+              if (analysisResponse.status === 200) {
+                const newAnalyses = analysisResponse.data.map((item: any) => ({
+                  id: item.id.toString(),
+                  confidence: `${(item.result_data?.confidence || 0).toFixed(1)}%`,
+                  duration: "00:00", // This will be updated when video data is fetched
+                  created_at: item.created_at,
+                  result: item.result_data || { is_fake: false, confidence: 0 },
+                  thumbnail_url: null,
+                  video_url: null
+                }));
+                setAnalyses(newAnalyses);
+              }
+            } catch (error) {
+              console.error("Error fetching latest analyses:", error);
+            }
+          };
+          fetchLatestAnalyses();
+        }} />
       ) : (
-        <div className="flex-1 min-h-screen">
-          <main className={`w-full ${isDarkMode ? 'bg-[#222222]' : 'bg-gray-50'} p-6`}>
-            <div className="max-w-6xl mx-auto">
-              <h1 className={`text-2xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-6`}>Result details</h1>
+        <div className="main-content">
+          <div className="content-wrapper">
+            <h1 className={`content-title ${!isDarkMode ? 'light' : ''}`}>Result details</h1>
 
-              {selectedResult ? (
-                <div className="space-y-6">
-                  <div className="aspect-video bg-black rounded-lg overflow-hidden">
-                    {selectedImage ? (
-                      <img
-                        src={selectedImage}
-                        alt="Result preview"
-                        className="w-full h-full object-contain"
-                        onError={async (e) => {
-                          try {
-                            console.error('Error loading image:', selectedImage);
-                            const imgElement = e.currentTarget as HTMLImageElement;
-                            if (!imgElement) {
-                              console.error('Image element is null, cannot update src');
-                              return;
+            {selectedResult ? (
+              <div className="space-y-6">
+                <div className="preview-container">
+                  <div className="aspect-video bg-black rounded-lg overflow-hidden relative w-full h-full">
+                    <div className="relative w-full h-full">
+                      {selectedImage && (
+                        <img
+                          key={selectedImage}
+                          src={selectedImage}
+                          alt=""
+                          className="w-full h-full object-contain"
+                          style={{
+                            opacity: isImageLoading ? 0 : 1,
+                            transition: 'opacity 0.2s ease-in-out'
+                          }}
+                          onLoad={(e) => {
+                            try {
+                              const img = e.currentTarget as HTMLImageElement;
+                              const canvas = document.createElement('canvas');
+                              canvas.width = Math.min(img.naturalWidth, 50);
+                              canvas.height = Math.min(img.naturalHeight, 50);
+                              const ctx = canvas.getContext('2d');
+                              if (ctx) {
+                                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                                const data = imageData.data;
+                                let totalBrightness = 0;
+                                for (let i = 0; i < data.length; i += 4) {
+                                  const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                                  totalBrightness += brightness;
+                                }
+                                const avgBrightness = totalBrightness / (data.length / 4);
+                                if (avgBrightness < 20) {
+                                  let greenPixels = 0;
+                                  for (let i = 0; i < data.length; i += 4) {
+                                    if (data[i] < 100 && data[i + 1] > 100 && data[i + 2] < 100) {
+                                      greenPixels++;
+                                    }
+                                  }
+                                  const greenPercentage = greenPixels / (data.length / 4) * 100;
+                                  if (greenPercentage < 30) {
+                                    img.src = 'https://placehold.co/600x400?text=No+Visible+Thumbnail';
+                                    return;
+                                  }
+                                }
+                                setIsImageLoading(false);
+                              }
+                            } catch (err) {
+                              setIsImageLoading(false);
                             }
+                          }}
+                          onError={async (e) => {
+                            try {
+                              const imgElement = e.currentTarget as HTMLImageElement;
+                              if (!imgElement) return;
 
-                            // Check if this is a CORS error or 404
-                            const isCorsOrMissingFile = selectedImage?.includes('amazonaws.com') || false;
+                              // Try to get a working URL
+                              const currentAnalysis = analyses.find((a: Analysis) => a.id === selectedResult);
+                              let videoId = currentAnalysis?.result?.video_id;
 
-                            if (isCorsOrMissingFile) {
-                              console.log('Likely S3 issue with image, trying alternative approaches');
-
-                              // Extract video ID from the URL if possible
-                              let videoId = null;
-                              const currentAnalysis = analyses.find(a => a.id === selectedResult);
-                              if (currentAnalysis?.result?.video_id) {
-                                videoId = currentAnalysis.result.video_id;
-                              } else if (selectedImage) {
-                                // Try to extract from thumbnail URL
+                              if (!videoId && selectedImage) {
                                 const match = selectedImage.match(/(?:thumbnail|placeholder)_(\d+)\.jpg/);
                                 if (match && match[1]) {
-                                  videoId = match[1];
+                                  videoId = parseInt(match[1], 10);
                                 }
                               }
 
-                              // If we have a video ID, try different fallback approaches
                               if (videoId) {
-                                console.log('Found video ID:', videoId);
-
-                                // Array of possible paths to try
                                 const pathsToTry = [
-                                  `media/thumbnails/placeholder_${videoId}.jpg`,
                                   `media/thumbnails/thumbnail_${videoId}.jpg`,
+                                  `media/thumbnails/placeholder_${videoId}.jpg`,
                                   `media/videos/thumbnail_${videoId}.jpg`
                                 ];
 
-                                // Check if proxy endpoint is available
-                                const isProxyAvailable = await checkEndpointAvailability('/proxy-image/');
-
-                                // Try each path in sequence
                                 for (const path of pathsToTry) {
-                                  // Get signed URL for the path
                                   const signedUrl = await getSignedUrl(path);
-
                                   if (signedUrl) {
+                                    const isProxyAvailable = await checkEndpointAvailability('/proxy-image/');
                                     if (isProxyAvailable) {
-                                      // Use proxy if available
                                       const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
-                                      console.log(`Trying proxy URL for ${path}:`, proxyUrl);
-
-                                      // Try proxy URL first
-                                      const proxySuccess = await loadImageDirectly(proxyUrl, imgElement);
-                                      if (proxySuccess) {
-                                        console.log('Proxy loading succeeded');
-                                        return;
-                                      }
-                                    }
-
-                                    // If proxy failed or isn't available, try direct URL
-                                    console.log(`Trying direct signed URL for ${path}:`, signedUrl);
-                                    const directSuccess = await loadImageDirectly(signedUrl, imgElement);
-                                    if (directSuccess) {
-                                      console.log('Direct loading succeeded');
+                                      imgElement.src = proxyUrl;
                                       return;
                                     }
+                                    imgElement.src = signedUrl;
+                                    return;
                                   }
                                 }
                               }
-
-                              // If all attempts with paths failed, try a public placeholder service
-                              const placeholderUrl = 'https://placehold.co/600x400?text=No+Thumbnail+Found';
-                              console.log('Using public placeholder service:', placeholderUrl);
-                              imgElement.src = placeholderUrl;
-                              return;
+                              imgElement.src = 'https://placehold.co/600x400?text=No+Thumbnail';
+                            } catch (error) {
+                              console.error('Error in image error handler:', error);
+                            } finally {
+                              setIsImageLoading(false);
                             }
-
-                            // If all else fails, use placeholder
-                            console.log('All attempts failed, using placeholder');
-                            imgElement.src = 'https://placehold.co/600x400?text=No+Thumbnail+Available';
-                          } catch (error) {
-                            console.error('Error in image error handler:', error);
-                            // Try one last time with a safe fallback
-                            try {
-                              const imgElement = e.currentTarget as HTMLImageElement;
-                              if (imgElement) {
-                                imgElement.src = 'https://placehold.co/600x400?text=Error+Loading+Image';
-                              }
-                            } catch (finalError) {
-                              console.error('Even fallback image failed:', finalError);
-                            }
-                          }
-                        }}
-                        onLoad={(e) => {
-                          // Check if the image might be completely black
-                          try {
-                            console.log('Thumbnail loaded successfully:', selectedImage);
-                            const img = e.currentTarget as HTMLImageElement;
-
-                            // Create a canvas to analyze the image
-                            const canvas = document.createElement('canvas');
-                            canvas.width = Math.min(img.naturalWidth, 50); // Analyze a small version
-                            canvas.height = Math.min(img.naturalHeight, 50);
-
-                            const ctx = canvas.getContext('2d');
-                            if (ctx) {
-                              ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                              // Get image data
-                              const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                              const data = imageData.data;
-
-                              // Check if the image is mostly black
-                              let totalBrightness = 0;
-                              for (let i = 0; i < data.length; i += 4) {
-                                // Calculate brightness (simple average)
-                                const brightness = (data[i] + data[i + 1] + data[i + 2]) / 3;
-                                totalBrightness += brightness;
-                              }
-
-                              const avgBrightness = totalBrightness / (data.length / 4);
-                              console.log('Average brightness:', avgBrightness);
-
-                              // If avg brightness is too low, replace with placeholder
-                              if (avgBrightness < 20) {
-                                console.log('Thumbnail appears to be too dark, replacing with placeholder');
-
-                                // Check if green placeholder (then don't replace it)
-                                let greenPixels = 0;
-                                for (let i = 0; i < data.length; i += 4) {
-                                  // Check for green color dominance
-                                  if (data[i] < 100 && data[i + 1] > 100 && data[i + 2] < 100) {
-                                    greenPixels++;
-                                  }
-                                }
-
-                                const greenPercentage = greenPixels / (data.length / 4) * 100;
-                                console.log('Green percentage:', greenPercentage);
-
-                                // If not a green placeholder, replace with one
-                                if (greenPercentage < 30) {
-                                  img.src = 'https://placehold.co/600x400?text=No+Visible+Thumbnail';
-                                } else {
-                                  console.log('Detected green placeholder, keeping it');
-                                }
-                              }
-                            }
-                          } catch (err) {
-                            console.error('Error analyzing image:', err);
-                          }
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <p className="text-gray-500">No thumbnail available</p>
-                      </div>
-                    )}
+                          }}
+                        />
+                      )}
+                      {isImageLoading && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 z-10">
+                          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-green-500"></div>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                </div>
 
-                  <div className={`${isDarkMode ? 'bg-[#333333]' : 'bg-white'} rounded-lg p-4 shadow-sm`}>
+                <div className="content-details">
+                  <div className={`details-table ${!isDarkMode ? 'light' : ''}`}>
                     <table className="w-full">
                       <thead>
                         <tr>
-                          <th className={`text-left p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>Model Result</th>
-                          <th className={`text-left p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>Confidence Score</th>
-                          <th className={`text-left p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>Video Details</th>
+                          <th>Model Result</th>
+                          <th>Confidence Score</th>
+                          <th>Duration</th>
                         </tr>
                       </thead>
                       <tbody>
-                        <tr>
-                          <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
-                            {analyses.find(item => item.id === selectedResult)?.result?.is_fake ? 'FAKE' : 'REAL'}
-                          </td>
-                          <td className="p-2 text-red-500">
-                            {analyses.find(item => item.id === selectedResult)?.confidence}
-                          </td>
-                          <td className={`p-2 ${isDarkMode ? 'text-neutral-200' : 'text-gray-800'}`}>
-                            {analyses.find(item => item.id === selectedResult)?.duration}
-                          </td>
-                        </tr>
+                        {selectedAnalysis && (
+                          <tr>
+                            <td style={{ color: selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e', textAlign: 'center' }}>
+                              {selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
+                            </td>
+                            <td className="confidence text-center">
+                              {selectedAnalysis.confidence}
+                            </td>
+                            <td className="text-center">
+                              {selectedAnalysis.duration}
+                            </td>
+                          </tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
-                  <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} mb-4`}>Select a result to view details</p>
-                </div>
-              )}
-            </div>
-          </main>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center min-h-[calc(100vh-12rem)]">
+                <p className={`${isDarkMode ? 'text-neutral-400' : 'text-gray-500'} mb-4`}>
+                  Select a result to view details
+                </p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {isDeleteDialogOpen && selectedResult && (
         <Dialog open={isDeleteDialogOpen} onOpenChange={() => setIsDeleteDialogOpen(false)}>
-          <DialogContent className={`${isDarkMode ? 'bg-[#333333] text-white' : 'bg-white text-black'}`}>
+          <DialogContent className={`${!isDarkMode ? 'light' : ''}`}>
             <DialogHeader>
               <DialogTitle>Confirm Deletion</DialogTitle>
-              <DialogDescription className={`${isDarkMode ? 'text-neutral-300' : 'text-gray-500'}`}>
+              <DialogDescription className={`${!isDarkMode ? 'light' : ''}`}>
                 Are you sure you want to delete Result#{selectedResult}? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
@@ -976,6 +916,61 @@ export const Dashboard = (): JSX.Element => {
           </DialogContent>
         </Dialog>
       )}
+
+      <Dialog open={isClearAllDialogOpen} onOpenChange={() => setIsClearAllDialogOpen(false)}>
+        <DialogContent className={`dialog-content ${!isDarkMode ? 'light' : ''}`}>
+          <DialogHeader>
+            <DialogTitle>Clear All Results</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to clear all results? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsClearAllDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                try {
+                  // Delete each analysis one by one
+                  for (const analysis of analyses) {
+                    await api.delete(`/api/analysis/${analysis.id}/`);
+                  }
+
+                  // Clear the state
+                  setAnalyses([]);
+                  setSelectedResult(null);
+                  setSelectedImage(null);
+                  setShowDetection(false);
+                  setIsClearAllDialogOpen(false);
+                } catch (error) {
+                  console.error("Error clearing analyses:", error);
+                  setError("Failed to clear analyses. Please try again.");
+                }
+              }}
+            >
+              Clear All
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isNoResultsDialogOpen} onOpenChange={() => setIsNoResultsDialogOpen(false)}>
+        <DialogContent className={`dialog-content ${!isDarkMode ? 'light' : ''}`}>
+          <DialogHeader>
+            <DialogTitle>No Results</DialogTitle>
+            <DialogDescription>
+              You don't have any results to clear. Start a new detection to analyze your first video.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setIsNoResultsDialogOpen(false)}>
+              OK
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
