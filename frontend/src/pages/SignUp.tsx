@@ -16,30 +16,80 @@ interface FormData {
   password: string;
 }
 
+interface ValidationError {
+  field: string;
+  message: string;
+}
+
 export const SignUp = () => {
   const [formData, setFormData] = useState<FormData>({
     username: '',
     email: '',
     password: ''
   });
+  const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [successMessage, setSuccessMessage] = useState<string>('');
   const navigate = useNavigate();
   const { isDarkMode, isTransitioning } = useTheme();
 
+  const validateForm = (): boolean => {
+    const newErrors: ValidationError[] = [];
+
+    // Username validation
+    if (formData.username.length < 5) {
+      newErrors.push({ field: 'username', message: 'Username must be at least 5 characters long' });
+    }
+    if (formData.username.length > 50) {
+      newErrors.push({ field: 'username', message: 'Username cannot exceed 50 characters' });
+    }
+
+    // Email validation
+    if (formData.email.length > 50) {
+      newErrors.push({ field: 'email', message: 'Email cannot exceed 50 characters' });
+    }
+    if (!formData.email.includes('@')) {
+      newErrors.push({ field: 'email', message: 'Please enter a valid email address' });
+    }
+
+    // Password validation
+    if (formData.password.length < 8) {
+      newErrors.push({ field: 'password', message: 'Password must be at least 8 characters long' });
+    }
+    if (formData.password.length > 50) {
+      newErrors.push({ field: 'password', message: 'Password cannot exceed 50 characters' });
+    }
+    if (!/[a-zA-Z]/.test(formData.password)) {
+      newErrors.push({ field: 'password', message: 'Password must contain at least one letter' });
+    }
+
+    setErrors(newErrors);
+    return newErrors.length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
+
     try {
       const response = await api.post('/api/signup/', formData);
       if (response.status === 201) {
-        navigate('/login');
+        setSuccessMessage('Registration successful! Redirecting to login...');
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
       }
     } catch (error) {
       console.error('Signup error:', error);
+      setErrors([{ field: 'general', message: 'Registration failed. Please try again.' }]);
     }
   };
 
+  const getErrorForField = (field: string): string | undefined => {
+    return errors.find(error => error.field === field)?.message;
+  };
+
   return (
-    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 ${isTransitioning ? 'theme-transitioning' : ''
-      }`}>
+    <div className={`min-h-screen w-full ${isDarkMode ? 'bg-neutral-950' : 'bg-gray-50'} flex items-center justify-center p-4 ${isTransitioning ? 'theme-transitioning' : ''}`}>
       {/* Theme Toggle Button - Fixed Position */}
       <div className="fixed top-6 right-6 z-50">
         <ThemeToggle />
@@ -50,7 +100,6 @@ export const SignUp = () => {
       </div>
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-
           <Link to="/">
             <img
               src={isDarkMode ? whiteLogo : darkLogo}
@@ -64,6 +113,18 @@ export const SignUp = () => {
           <h2 className={`mt-4 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Create an account</h2>
         </div>
 
+        {successMessage && (
+          <div className="p-4 bg-green-100 text-green-700 rounded-lg">
+            {successMessage}
+          </div>
+        )}
+
+        {getErrorForField('general') && (
+          <div className="p-4 bg-red-100 text-red-700 rounded-lg">
+            {getErrorForField('general')}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-4">
             <div>
@@ -73,7 +134,11 @@ export const SignUp = () => {
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                maxLength={50}
               />
+              {getErrorForField('email') && (
+                <p className="text-red-500 text-sm mt-1">{getErrorForField('email')}</p>
+              )}
             </div>
             <div>
               <Input
@@ -82,7 +147,11 @@ export const SignUp = () => {
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                maxLength={50}
               />
+              {getErrorForField('username') && (
+                <p className="text-red-500 text-sm mt-1">{getErrorForField('username')}</p>
+              )}
             </div>
             <div>
               <Input
@@ -91,7 +160,11 @@ export const SignUp = () => {
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                maxLength={50}
               />
+              {getErrorForField('password') && (
+                <p className="text-red-500 text-sm mt-1">{getErrorForField('password')}</p>
+              )}
             </div>
           </div>
 
