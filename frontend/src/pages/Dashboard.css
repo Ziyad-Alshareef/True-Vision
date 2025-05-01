@@ -21,7 +21,9 @@
 .sidebar {
     position: fixed;
     width: 320px;
-    min-height: 100vh;
+    height: 100%;
+    max-height: -webkit-fill-available;
+    /* For iOS Safari */
     background-color: #222222;
     color: #e5e5e5;
     display: flex;
@@ -30,6 +32,7 @@
     transition: transform 0.3s ease-in-out;
     z-index: 50;
     transform: translateX(-100%);
+    overflow-y: auto;
 }
 
 .sidebar.light {
@@ -82,6 +85,8 @@
     flex: 1;
     overflow: hidden;
     padding: 0 12px;
+    margin-bottom: env(safe-area-inset-bottom);
+    /* For iOS devices with home indicator */
 }
 
 .results-list {
@@ -192,8 +197,15 @@
 .bottom-actions {
     padding: 16px;
     padding-top: 8px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    /* Add padding for mobile browsers */
     background: inherit;
     flex-shrink: 0;
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
 }
 
 .new-detection-button {
@@ -327,9 +339,17 @@
 
 .main-content {
     flex: 1;
-    min-height: 100vh;
-    width: 100%;
     padding: 24px;
+    padding-left: 24px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    /* Add padding for mobile browsers */
+    margin-left: 0;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    /* For iOS Safari */
+    overflow-y: auto;
+    position: relative;
+    z-index: 1;
 }
 
 .main-content.dark {
@@ -459,4 +479,27 @@
 
 .details-table td.confidence {
     color: #ef4444;
+}
+
+@media (max-width: 1023px) {
+    .dashboard-container {
+        min-height: -webkit-fill-available;
+        /* For iOS Safari */
+        padding-bottom: env(safe-area-inset-bottom);
+        /* For iOS devices with home indicator */
+    }
+
+    .sidebar {
+        height: 100%;
+        height: -webkit-fill-available;
+        /* For iOS Safari */
+        padding-bottom: env(safe-area-inset-bottom);
+        /* For iOS devices with home indicator */
+    }
+
+    .main-content {
+        width: 100%;
+        padding-bottom: calc(24px + env(safe-area-inset-bottom));
+        /* For iOS devices with home indicator */
+    }
 }
