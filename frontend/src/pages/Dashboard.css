@@ -86,21 +86,18 @@
 
 .results-container {
     flex: 1;
-    overflow: hidden;
     padding: 0 12px;
-    padding-bottom: env(safe-area-inset-bottom);
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 0;
+    overflow: hidden;
 }
 
 .results-list {
     flex: 1;
     overflow-y: auto;
     padding: 0 2px;
-    margin-bottom: 16px;
     -webkit-overflow-scrolling: touch;
+    margin-bottom: 16px;
 }
 
 .result-item {
@@ -356,7 +353,6 @@
     padding-bottom: calc(24px + env(safe-area-inset-bottom));
     margin-left: 0;
     min-height: 100vh;
-    min-height: -webkit-fill-available;
     position: relative;
     z-index: 1;
     overflow-y: auto;
@@ -496,34 +492,29 @@
         position: relative;
         height: 100%;
         min-height: 100vh;
-        min-height: -webkit-fill-available;
-        overflow-y: auto;
-    }
-
-    .sidebar {
-        position: fixed;
-        height: 100%;
-        height: -webkit-fill-available;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
     }
 
     .main-content {
         width: 100%;
         height: auto;
         min-height: 100vh;
-        min-height: -webkit-fill-available;
         overflow-y: auto;
         padding-bottom: calc(24px + env(safe-area-inset-bottom));
         -webkit-overflow-scrolling: touch;
+        padding-top: 72px;
+    }
+
+    .sidebar {
+        position: fixed;
+        height: 100%;
+        overflow-y: hidden;
     }
 
     .results-container {
         flex: 1;
         height: auto;
         min-height: 0;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
+        overflow: hidden;
     }
 
     .results-list {
@@ -562,20 +553,8 @@
 
 /* Safari-specific fixes */
 @supports (-webkit-touch-callout: none) {
-    .dashboard-container {
-        height: 100vh;
-        min-height: -webkit-fill-available;
-    }
-
     .sidebar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        bottom: 0;
-        height: 100vh;
-        /* Fallback */
         height: -webkit-fill-available;
-        max-height: -webkit-fill-available;
     }
 
     @media (max-width: 1023px) {
@@ -584,24 +563,11 @@
             top: env(safe-area-inset-top);
             bottom: env(safe-area-inset-bottom);
             height: 100%;
-            /* Fix for Safari URL bar hiding */
             height: -webkit-fill-available;
-            max-height: -webkit-fill-available;
         }
 
-        /* Add a wrapper div inside sidebar for content */
-        .sidebar-content {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            min-height: -webkit-fill-available;
-        }
-
-        /* Ensure bottom actions stay at bottom */
-        .bottom-actions {
-            margin-top: auto;
-            padding-bottom: max(16px, env(safe-area-inset-bottom));
-            background: inherit;
+        .results-list {
+            padding-bottom: env(safe-area-inset-bottom);
         }
     }
 }
