@@ -227,6 +227,29 @@ export const Dashboard = (): JSX.Element => {
   const [isNoResultsDialogOpen, setIsNoResultsDialogOpen] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(false);
 
+  // Add viewport height calculation effect
+  useEffect(() => {
+    const updateHeight = () => {
+      // First we get the viewport height and we multiple it by 1% to get a value for a vh unit
+      const vh = window.innerHeight * 0.01;
+      // Then we set the value in the --vh custom property to the root of the document
+      document.documentElement.style.setProperty('--vh', `${vh}px`);
+    };
+
+    // Initial calculation
+    updateHeight();
+
+    // Add event listeners for resize and orientation change
+    window.addEventListener('resize', updateHeight);
+    window.addEventListener('orientationchange', updateHeight);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', updateHeight);
+      window.removeEventListener('orientationchange', updateHeight);
+    };
+  }, []);
+
   // Fetch analyses effect
   useEffect(() => {
     const fetchAnalyses = async () => {

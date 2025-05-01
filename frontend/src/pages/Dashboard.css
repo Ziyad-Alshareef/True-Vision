@@ -26,7 +26,6 @@
     position: fixed;
     width: 320px;
     height: 100vh;
-    height: -webkit-fill-available;
     background-color: #222222;
     color: #e5e5e5;
     display: flex;
@@ -564,45 +563,67 @@
 /* Safari-specific fixes */
 @supports (-webkit-touch-callout: none) {
     .dashboard-container {
+        height: 100vh;
         min-height: -webkit-fill-available;
     }
 
     .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        height: 100vh;
+        /* Fallback */
         height: -webkit-fill-available;
-    }
-
-    .main-content {
-        min-height: -webkit-fill-available;
+        max-height: -webkit-fill-available;
     }
 
     @media (max-width: 1023px) {
-        .dashboard-container {
-            min-height: -webkit-fill-available;
-        }
-
         .sidebar {
+            position: fixed;
+            top: env(safe-area-inset-top);
+            bottom: env(safe-area-inset-bottom);
+            height: 100%;
+            /* Fix for Safari URL bar hiding */
             height: -webkit-fill-available;
+            max-height: -webkit-fill-available;
         }
 
-        .main-content {
+        /* Add a wrapper div inside sidebar for content */
+        .sidebar-content {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
             min-height: -webkit-fill-available;
         }
 
-        .results-container {
-            height: auto;
-            max-height: -webkit-fill-available;
+        /* Ensure bottom actions stay at bottom */
+        .bottom-actions {
+            margin-top: auto;
+            padding-bottom: max(16px, env(safe-area-inset-bottom));
+            background: inherit;
         }
     }
 }
 
-/* Fix for notched iPhones */
+/* Fix for notched devices */
 @supports (padding-top: env(safe-area-inset-top)) {
-    .sidebar {
-        padding-top: env(safe-area-inset-top);
+    @media (max-width: 1023px) {
+        .sidebar {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+    }
+}
+
+/* Fix for iOS vh unit */
+@media (max-width: 1023px) {
+    :root {
+        --vh: 1vh;
     }
 
-    .main-content {
-        padding-top: max(72px, env(safe-area-inset-top));
+    .sidebar {
+        height: calc(var(--vh, 1vh) * 100);
     }
 }
 
