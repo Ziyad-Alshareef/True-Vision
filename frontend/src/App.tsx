@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import Dashboard from './pages/Dashboard';
 import ResetPassword from './pages/ResetPassword';
+import AccountManagement from './pages/AccountManagement';
 import Contact from './pages/Contact';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import { AuthProvider } from './context/AuthContext';
@@ -24,6 +25,7 @@ const App: React.FC = () => {
               <Route path="/signup" element={<SignUp />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/account" element={<AccountManagement />} />
               <Route path="/contact" element={<Contact />} />
               <Route path="/privacy-policy" element={<PrivacyPolicy />} />
             </Routes>

@@ -7,6 +7,7 @@ import {
   LogOutIcon,
   MenuIcon,
   XIcon,
+  Settings,
 } from "lucide-react";
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -647,9 +648,18 @@ export const Dashboard = (): JSX.Element => {
         <div className="header-card">
           <div className="header-content">
             <img src={logo} alt="True Vision Logo" className="logo" />
-            <span className={`dashboard-title ${!isDarkMode ? 'light' : ''}`}>
-              {username || 'My Dashboard'}
-            </span>
+            <div className="flex items-center justify-between w-full">
+              <span className={`dashboard-title ${!isDarkMode ? 'light' : ''}`}>
+                {username || 'My Dashboard'}
+              </span>
+              <button
+                onClick={() => navigate('/account')}
+                className={`p-1 rounded-full hover:bg-opacity-10 hover:bg-white transition-colors ${!isDarkMode ? 'text-gray-800 hover:bg-gray-200' : 'text-white'}`}
+                title="Account Settings"
+              >
+                <Settings className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
 
