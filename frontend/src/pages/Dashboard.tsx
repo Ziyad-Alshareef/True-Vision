@@ -898,15 +898,15 @@ export const Dashboard = (): JSX.Element => {
 
       {isDeleteDialogOpen && selectedResult && (
         <Dialog open={isDeleteDialogOpen} onOpenChange={() => setIsDeleteDialogOpen(false)}>
-          <DialogContent className={`${!isDarkMode ? 'light' : ''}`}>
+          <DialogContent className={`${isDarkMode ? 'dark bg-neutral-900 text-white' : 'light bg-white text-gray-900'}`}>
             <DialogHeader>
-              <DialogTitle>Confirm Deletion</DialogTitle>
-              <DialogDescription className={`${!isDarkMode ? 'light' : ''}`}>
+              <DialogTitle className={isDarkMode ? 'text-white' : 'text-gray-900'}>Confirm Deletion</DialogTitle>
+              <DialogDescription className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>
                 Are you sure you want to delete Result#{selectedResult}? This action cannot be undone.
               </DialogDescription>
             </DialogHeader>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              <Button variant={isDarkMode ? "outline" : "secondary"} onClick={() => setIsDeleteDialogOpen(false)}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={confirmDelete}>
@@ -918,15 +918,15 @@ export const Dashboard = (): JSX.Element => {
       )}
 
       <Dialog open={isClearAllDialogOpen} onOpenChange={() => setIsClearAllDialogOpen(false)}>
-        <DialogContent className={`dialog-content ${!isDarkMode ? 'light' : ''}`}>
+        <DialogContent className={`${isDarkMode ? 'dark bg-neutral-900 text-white' : 'light bg-white text-gray-900'}`}>
           <DialogHeader>
-            <DialogTitle>Clear All Results</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className={isDarkMode ? 'text-white' : 'text-gray-900'}>Clear All Results</DialogTitle>
+            <DialogDescription className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>
               Are you sure you want to clear all results? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsClearAllDialogOpen(false)}>
+            <Button variant={isDarkMode ? "outline" : "secondary"} onClick={() => setIsClearAllDialogOpen(false)}>
               Cancel
             </Button>
             <Button
@@ -957,15 +957,15 @@ export const Dashboard = (): JSX.Element => {
       </Dialog>
 
       <Dialog open={isNoResultsDialogOpen} onOpenChange={() => setIsNoResultsDialogOpen(false)}>
-        <DialogContent className={`dialog-content ${!isDarkMode ? 'light' : ''}`}>
+        <DialogContent className={`${isDarkMode ? 'dark bg-neutral-900 text-white' : 'light bg-white text-gray-900'}`}>
           <DialogHeader>
-            <DialogTitle>No Results</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className={isDarkMode ? 'text-white' : 'text-gray-900'}>No Results</DialogTitle>
+            <DialogDescription className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>
               You don't have any results to clear. Start a new detection to analyze your first video.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button onClick={() => setIsNoResultsDialogOpen(false)}>
+            <Button variant={isDarkMode ? "outline" : "secondary"} onClick={() => setIsNoResultsDialogOpen(false)}>
               OK
             </Button>
           </DialogFooter>
