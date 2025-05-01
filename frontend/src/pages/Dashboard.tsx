@@ -226,6 +226,7 @@ export const Dashboard = (): JSX.Element => {
   const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
   const [isNoResultsDialogOpen, setIsNoResultsDialogOpen] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(false);
+  const [username, setUsername] = useState<string>('');
 
   // Add viewport height calculation effect
   useEffect(() => {
@@ -248,6 +249,14 @@ export const Dashboard = (): JSX.Element => {
       window.removeEventListener('resize', updateHeight);
       window.removeEventListener('orientationchange', updateHeight);
     };
+  }, []);
+
+  // Get username from localStorage
+  useEffect(() => {
+    const storedUsername = localStorage.getItem('username');
+    if (storedUsername) {
+      setUsername(storedUsername);
+    }
   }, []);
 
   // Fetch analyses effect
@@ -639,7 +648,7 @@ export const Dashboard = (): JSX.Element => {
           <div className="header-content">
             <img src={logo} alt="True Vision Logo" className="logo" />
             <span className={`dashboard-title ${!isDarkMode ? 'light' : ''}`}>
-              My Dashboard
+              {username || 'My Dashboard'}
             </span>
           </div>
         </div>

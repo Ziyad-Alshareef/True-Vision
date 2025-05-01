@@ -69,6 +69,7 @@ export const Login = () => {
         const data = response.data;
         localStorage.setItem('access', data.access);
         localStorage.setItem('refresh', data.refresh);
+        localStorage.setItem('username', formData.username);
         login();
         navigate('/dashboard');
       }
