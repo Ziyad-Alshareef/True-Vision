@@ -663,3 +663,77 @@
         min-height: -webkit-fill-available;
     }
 }
+
+/* Loading animation styles */
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-top: -20px;
+    /* Half of height */
+    margin-left: -20px;
+    /* Half of width */
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(9, 127, 77, 0.3);
+    border-radius: 50%;
+    border-top-color: #097F4D;
+    animation: spin 1s linear infinite;
+}
+
+/* Ensure loading overlay is visible */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+}
+
+/* Mobile-specific loading styles */
+@media (max-width: 768px) {
+    .loading-spinner {
+        width: 30px;
+        height: 30px;
+        margin-top: -15px;
+        margin-left: -15px;
+        border-width: 2px;
+    }
+}
+
+/* Safari-specific fixes */
+@supports (-webkit-touch-callout: none) {
+    .loading-spinner {
+        -webkit-transform: translate3d(-50%, -50%, 0);
+        transform: translate3d(-50%, -50%, 0);
+    }
+}
+
+/* Firefox-specific fixes */
+@-moz-document url-prefix() {
+    .loading-spinner {
+        border-top-color: #097F4D !important;
+    }
+}
+
+/* Edge-specific fixes */
+@supports (-ms-ime-align: auto) {
+    .loading-spinner {
+        border-top-color: #097F4D !important;
+    }
+}
