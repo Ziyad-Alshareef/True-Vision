@@ -219,19 +219,19 @@ export const AccountManagement = () => {
                                 </div>
                             </div>
 
-                            <div className="flex justify-end space-x-4 pt-6">
+                            <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pt-4 sm:pt-6 w-full">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     onClick={() => navigate('/dashboard')}
-                                    className={isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : ''}
+                                    className={`w-full ${isDarkMode ? 'border-gray-600 text-gray-300 hover:bg-gray-800' : ''}`}
                                 >
                                     Back to Dashboard
                                 </Button>
                                 <Button
                                     type="submit"
                                     disabled={isLoading}
-                                    className="auth-button"
+                                    className={`w-full auth-button ${isDarkMode ? 'text-white' : ''}`}
                                 >
                                     {isLoading ? 'Saving...' : 'Save Changes'}
                                 </Button>
@@ -244,9 +244,9 @@ export const AccountManagement = () => {
                             Account Deletion
                         </h2>
                         <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-red-900/20' : 'bg-red-50'} border border-red-500/20`}>
-                            <div className="flex flex-col space-y-4">
+                            <div className="flex flex-col space-y-3 sm:space-y-4">
                                 <div>
-                                    <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                                    <h3 className={`text-base sm:text-lg font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                                         Delete Account
                                     </h3>
                                     <p className={`mt-1 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
@@ -256,7 +256,7 @@ export const AccountManagement = () => {
                                 <Button
                                     variant="destructive"
                                     onClick={() => setIsDeleteDialogOpen(true)}
-                                    className="w-fit"
+                                    className="w-full sm:w-fit"
                                 >
                                     Delete Account
                                 </Button>
@@ -283,11 +283,19 @@ export const AccountManagement = () => {
                             className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'}`}
                         />
                     </div>
-                    <DialogFooter>
-                        <Button variant={isDarkMode ? "outline" : "secondary"} onClick={() => setIsDeleteDialogOpen(false)}>
+                    <DialogFooter className="flex flex-col sm:flex-row justify-center gap-2 sm:gap-4 w-full">
+                        <Button
+                            variant={isDarkMode ? "outline" : "secondary"}
+                            onClick={() => setIsDeleteDialogOpen(false)}
+                            className="w-full"
+                        >
                             Cancel
                         </Button>
-                        <Button variant="destructive" onClick={handleDeleteAccount}>
+                        <Button
+                            variant="destructive"
+                            onClick={handleDeleteAccount}
+                            className="w-full"
+                        >
                             Delete Account
                         </Button>
                     </DialogFooter>
