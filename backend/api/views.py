@@ -18,6 +18,10 @@ import subprocess
 import requests
 from django.http import HttpResponse
 import mimetypes
+import random
+import string
+from django.core.mail import send_mail
+from datetime import datetime, timedelta
 
 # Get the user model (now points to CustomUser)
 User = get_user_model()
@@ -619,6 +623,7 @@ class S3ObjectExistsView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 ### for account management
 class ChangePasswordView(APIView):
     """View for changing user password"""
@@ -698,6 +703,137 @@ class UserInfoView(APIView):
             "username": user.username,
             "email": user.email
         })
+
+class RequestPasswordResetView(APIView):
+    """View for requesting a password reset"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response(
+                {"error": "Email is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            user = User.objects.get(email=email)
+            
+            # Generate a random reset token
+            reset_token = ''.join(random.choices(string.ascii_letters + string.digits, k=20))
+            
+            # Store token and expiry in user's model
+            user.reset_password_token = reset_token
+            user.reset_password_token_expiry = datetime.now() + timedelta(hours=1)
+            user.save()
+            
+            # Send email with reset link
+            reset_link = f"{settings.FRONTEND_URL}/reset-password-confirm?token={reset_token}"
+            email_subject = "True Vision - Password Reset Request"
+            email_message = f"""
+            Hello {user.username},
+
+            We received a request to reset your password. Please use the link below to reset your password:
+
+            {reset_link}
+
+            This link will expire in 1 hour.
+
+            If you did not request a password reset, please ignore this email.
+
+            Best regards,
+            True Vision Team
+            """
+            
+            send_mail(
+                email_subject,
+                email_message,
+                "TrueVision.DFD@gmail.com",  # From email address
+                [email],  # To email address
+                fail_silently=False,
+            )
+            
+            return Response(
+                {"message": "Password reset instructions sent to your email."},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            # Return success even if user doesn't exist for security reasons
+            return Response(
+                {"message": "If your email exists in our system, you will receive password reset instructions."},
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": "An error occurred while processing your request."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class ConfirmPasswordResetView(APIView):
+    """View for confirming a password reset with token and setting new password"""
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        token = request.data.get('token')
+        new_password = request.data.get('new_password')
+        confirm_password = request.data.get('confirm_password')
+        
+        # Validate input
+        if not all([token, new_password, confirm_password]):
+            return Response(
+                {"error": "All fields are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if new_password != confirm_password:
+            return Response(
+                {"error": "Passwords do not match"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if len(new_password) < 8:
+            return Response(
+                {"error": "Password must be at least 8 characters long"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        if not any(char.isalpha() for char in new_password):
+            return Response(
+                {"error": "Password must contain at least one letter"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            # Find user with this token
+            user = User.objects.get(reset_password_token=token)
+            
+            # Check token expiry
+            if not user.reset_password_token_expiry or user.reset_password_token_expiry < datetime.now():
+                return Response(
+                    {"error": "Password reset token has expired. Please request a new one."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Reset the password
+            user.set_password(new_password)
+            user.reset_password_token = None
+            user.reset_password_token_expiry = None
+            user.save()
+            
+            return Response(
+                {"message": "Password has been reset successfully. You can now log in with your new password."},
+                status=status.HTTP_200_OK
+            )
+        except User.DoesNotExist:
+            return Response(
+                {"error": "Invalid token. Please request a new password reset."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {"error": "An error occurred while processing your request."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 '''from django.shortcuts import render
 from api.models import User

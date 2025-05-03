@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView, S3ImageProxyView, S3ObjectExistsView, ChangePasswordView, DeleteAccountView, UserInfoView
+from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView, S3ImageProxyView, S3ObjectExistsView, ChangePasswordView, DeleteAccountView, UserInfoView, RequestPasswordResetView, ConfirmPasswordResetView
 
 router = DefaultRouter()
 router.register(r'analysis', AnalysisViewSet, basename='analysis')
@@ -16,6 +16,10 @@ urlpatterns = [
     path('user/change-password/', ChangePasswordView.as_view(), name='change-password'),
     path('user/delete-account/', DeleteAccountView.as_view(), name='delete-account'),
     path('user/info/', UserInfoView.as_view(), name='user-info'),
+    
+    # Password Reset Endpoints
+    path('reset-password/request/', RequestPasswordResetView.as_view(), name='reset-password-request'),
+    path('reset-password/confirm/', ConfirmPasswordResetView.as_view(), name='reset-password-confirm'),
     
     # S3 testing routes
     path('test/s3/', S3TestView.as_view(), name='test_s3_connection'),
