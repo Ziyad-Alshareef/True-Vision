@@ -34,6 +34,7 @@ export const Login = () => {
     password: ''
   });
   const [errors, setErrors] = useState<ValidationError[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
 
   const validateForm = (): boolean => {
@@ -63,6 +64,7 @@ export const Login = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    setIsLoading(true);
     try {
       const response = await api.post<LoginResponse>('/api/token/', formData);
       if (response.status === 200) {
@@ -76,6 +78,8 @@ export const Login = () => {
     } catch (error) {
       console.error('Login error:', error);
       setErrors([{ field: 'general', message: 'Invalid username or password' }]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -152,8 +156,16 @@ export const Login = () => {
           <Button
             type="submit"
             className="auth-button"
+            disabled={isLoading}
           >
-            Login
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Logging in...
+              </div>
+            ) : (
+              'Login'
+            )}
           </Button>
 
           <div className="text-center text-sm">
