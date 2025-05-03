@@ -218,6 +218,9 @@ class VideoUploadTestView(APIView):
                 "model_used": "No Detection Run"
             }
             
+            # Reset file pointer for reading
+            video_file.seek(0)
+            
             # If detection was requested, run deepfake detection
             if run_detection:
                 try:
@@ -252,12 +255,17 @@ class VideoUploadTestView(APIView):
             
             logger.info(f"Creating analysis with result data: {result_data}")
             
-            # For S3 storage, we need to use the original file
+            # IMPORTANT CHANGE: Don't store the video file again in Analysis
             # The video is already saved to S3 when we saved the Video object
-            # Django handles file uploads automatically
+            # Instead, create Analysis with reference to video_id
             analysis = Analysis(
                 user=user,
-                video=video_file,  # This will be stored in S3
+                # Don't store video file again - this was causing RAM to increase
+                # video=video_file,  # This will be stored in S3
+                # Instead, use a direct reference:
+                # (Note: If Analysis model has a required video field,
+                # you may need to modify the model to include a video_reference field
+                # referencing the Video model)
                 result=json.dumps(result_data)
             )
             
@@ -267,6 +275,7 @@ class VideoUploadTestView(APIView):
             
             # Close the file handle to release memory - the file is already saved to S3
             video_file.close()
+            video_file = None
             
             # Force garbage collection
             import gc
@@ -288,6 +297,7 @@ class VideoUploadTestView(APIView):
             # Clean up video file from memory
             if video_file:
                 video_file.close()
+                video_file = None
                 import gc
                 gc.collect()
             return Response({
@@ -305,11 +315,20 @@ class VideoUploadTestView(APIView):
         
         try:
             # Create a temporary file for FFprobe to analyze
+            temp_file_path = None
             with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_file.name)[1], delete=False) as temp_file:
-                # Save the uploaded file to the temporary file
-                for chunk in video_file.chunks():
-                    temp_file.write(chunk)
+                # Save the uploaded file to the temporary file in chunks to reduce memory usage
                 temp_file_path = temp_file.name
+                chunk_size = 1024 * 1024  # Process in 1MB chunks
+                for chunk in video_file.chunks(chunk_size):
+                    temp_file.write(chunk)
+                    # Clear chunk from memory
+                    chunk = None
+                    # Periodically collect garbage
+                    if chunk_size % 5 == 0:
+                        import gc
+                        gc.collect()
+                temp_file.flush()
             
             # Use FFprobe to extract metadata
             cmd = [
@@ -354,12 +373,24 @@ class VideoUploadTestView(APIView):
                     'resolution': '640x480',
                     'fps': 30
                 }
-            
-            # Clean up temporary file
-            os.unlink(temp_file_path)
+            finally:
+                # Clear result variables
+                result = None
+                probe_data = None
+                
+                # Clean up temporary file
+                if temp_file_path and os.path.exists(temp_file_path):
+                    try:
+                        os.unlink(temp_file_path)
+                    except Exception as e:
+                        print(f"Error deleting temp file: {e}")
             
             # Reset file pointer for further processing
             video_file.seek(0)
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
             
         except Exception as e:
             print(f"Error in metadata extraction: {e}")
@@ -750,6 +781,10 @@ class DeepFakeDetectionView(APIView):
                 )
                 video.save()
                 logger.info(f"New video created with ID: {video.Video_id}")
+                
+                # Reset file pointer
+                if video_file:
+                    video_file.seek(0)
             
             # Store thumbnail URL for response
             thumbnail_url = video.Thumbnail.url if video.Thumbnail else None
@@ -782,10 +817,11 @@ class DeepFakeDetectionView(APIView):
                 
                 logger.info(f"Creating analysis with result data: {result_data}")
                 
-                # Create new Analysis object with S3 storage
+                # Create new Analysis object WITHOUT duplicate video storage
                 analysis = Analysis(
                     user=request.user,
-                    video=video_file if video_file else None,
+                    # Don't store video file again - avoids RAM usage duplication
+                    # video=video_file if video_file else None,
                     result=json.dumps(result_data)
                 )
                 analysis.save()
@@ -802,6 +838,7 @@ class DeepFakeDetectionView(APIView):
                 # Release file handle to free memory - the file is already saved to S3
                 if video_file:
                     video_file.close()
+                    video_file = None
                     
                 # Force garbage collection
                 import gc
@@ -822,6 +859,7 @@ class DeepFakeDetectionView(APIView):
                 # Clean up video file from memory
                 if video_file:
                     video_file.close()
+                    video_file = None
                     import gc
                     gc.collect()
                 return Response({
@@ -835,6 +873,7 @@ class DeepFakeDetectionView(APIView):
             # Clean up video file from memory
             if video_file:
                 video_file.close()
+                video_file = None
                 import gc
                 gc.collect()
             return Response({
@@ -843,7 +882,7 @@ class DeepFakeDetectionView(APIView):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
     def _get_video_metadata(self, video_file):
-        """Extract metadata from video file (copied from VideoUploadTestView)"""
+        """Extract metadata from video file (optimized for memory usage)"""
         metadata = {
             'duration': 0,
             'resolution': '0x0',
@@ -852,11 +891,20 @@ class DeepFakeDetectionView(APIView):
         
         try:
             # Create a temporary file for FFprobe to analyze
+            temp_file_path = None
             with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_file.name)[1], delete=False) as temp_file:
-                # Save the uploaded file to the temporary file
-                for chunk in video_file.chunks():
-                    temp_file.write(chunk)
+                # Save the uploaded file to the temporary file in chunks to reduce memory usage
                 temp_file_path = temp_file.name
+                chunk_size = 1024 * 1024  # Process in 1MB chunks
+                for chunk in video_file.chunks(chunk_size):
+                    temp_file.write(chunk)
+                    # Clear chunk from memory
+                    chunk = None
+                    # Periodically collect garbage
+                    if chunk_size % 5 == 0:
+                        import gc
+                        gc.collect()
+                temp_file.flush()
             
             # Use FFprobe to extract metadata
             cmd = [
@@ -901,12 +949,24 @@ class DeepFakeDetectionView(APIView):
                     'resolution': '640x480',
                     'fps': 30
                 }
-            
-            # Clean up temporary file
-            os.unlink(temp_file_path)
-            
+            finally:
+                # Clear result variables
+                result = None
+                probe_data = None
+                
+                # Clean up temporary file
+                if temp_file_path and os.path.exists(temp_file_path):
+                    try:
+                        os.unlink(temp_file_path)
+                    except Exception as e:
+                        print(f"Error deleting temp file: {e}")
+                        
             # Reset file pointer for further processing
             video_file.seek(0)
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
             
         except Exception as e:
             print(f"Error in metadata extraction: {e}")

@@ -595,6 +595,15 @@ def detect_deepfake(video_obj):
         all_probs = None
         results = None
         
+        # Explicitly clean up large objects
+        if face_net is not None:
+            face_net = None
+        
+        if deepfake_model is not None:
+            # Delete the model to free up CUDA memory
+            del deepfake_model
+            deepfake_model = None
+        
         # Force Python garbage collection
         import gc
         gc.collect()
