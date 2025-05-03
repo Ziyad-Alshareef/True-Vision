@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView, S3ImageProxyView, S3ObjectExistsView, ChangePasswordView, DeleteAccountView, UserInfoView
+from .views import CreateUserView, AnalysisViewSet, S3TestView, VideoUploadTestView, VideoViewSet, S3SignedURLView, S3ImageProxyView, S3ObjectExistsView, ChangePasswordView, DeleteAccountView, UserInfoView, DeepFakeDetectionView
 
 router = DefaultRouter()
 router.register(r'analysis', AnalysisViewSet, basename='analysis')
@@ -27,6 +27,12 @@ urlpatterns = [
     
     # Image proxy
     path('proxy-image/', S3ImageProxyView.as_view(), name='proxy_image'),
+    
+    # Deepfake detection
+    path('detect-deepfake/', DeepFakeDetectionView.as_view(), name='detect_deepfake'),
+    
+    # Specific endpoint for deepfake API (for external integrations)
+    path('api/deepfake/', DeepFakeDetectionView.as_view(), name='deepfake_api'),
 ]
 
 

@@ -567,6 +567,16 @@ class DetectionModel(models.Model):
     ])
     Detected_at = models.DateTimeField(auto_now_add=True)
 
+class DeepFakeDetection(models.Model):
+    """Deepfake detection specific model"""
+    detection = models.OneToOneField(Detection, on_delete=models.CASCADE, related_name='deepfake_detection')
+    face_count = models.IntegerField(default=0)
+    frame_count = models.IntegerField(default=0)
+    detection_time = models.FloatField(default=0.0)
+    detection_method = models.CharField(max_length=255, default='dnn_face')
+    model_version = models.CharField(max_length=50, default='1.0')
+    created_at = models.DateTimeField(auto_now_add=True)
+
 class Analysis(models.Model):
     user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
     video = models.FileField(storage=S3MediaStorage(), upload_to='uploads/')

@@ -4,7 +4,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth import get_user_model, authenticate
-from .models import Analysis, Video, Model, Detection, DetectionModel, CustomUser
+from .models import Analysis, Video, Model, Detection, DetectionModel, CustomUser, DeepFakeDetection
 from .serializers import CustomUserSerializer, AnalysisSerializer, VideoSerializer
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
@@ -18,6 +18,8 @@ import subprocess
 import requests
 from django.http import HttpResponse
 import mimetypes
+# Import the deepfake detector
+from .detector import detect_deepfake
 
 # Get the user model (now points to CustomUser)
 User = get_user_model()
@@ -150,7 +152,6 @@ class S3TestView(APIView):
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# Also create a simple view to test uploading a video
 class VideoUploadTestView(APIView):
     """Test view for uploading videos to S3"""
     permission_classes = [IsAuthenticated]  # Allow only authenticated users
@@ -159,6 +160,7 @@ class VideoUploadTestView(APIView):
     def post(self, request, *args, **kwargs):
         """Handle video upload and storage in S3"""
         video_file = request.FILES.get('video')
+        run_detection = request.data.get('detect_deepfake', 'true').lower() == 'true'  # Default to true
         
         if not video_file:
             return Response({'error': 'No video file provided'}, 
@@ -184,14 +186,52 @@ class VideoUploadTestView(APIView):
             # Save the video (this will trigger the save method that generates thumbnail)
             video.save()
             
+            detection_result = None
+            # Run deepfake detection if requested
+            if run_detection:
+                try:
+                    # Run detection and get results
+                    detection, is_fake, confidence, metadata = detect_deepfake(video)
+                    
+                    # Create detection model result
+                    detection_model, created = Model.objects.get_or_create(
+                        Name="Face-based Deepfake Detector",
+                        Version="1.0",
+                        Description="Basic deepfake detection using face analysis"
+                    )
+                    
+                    detection_result = DetectionModel.objects.create(
+                        Model_id=detection_model,
+                        Result_id=detection,
+                        Confidence=confidence,
+                        Result='fake' if is_fake else 'real'
+                    )
+                    
+                    # Format the detection result for the response
+                    detection_info = {
+                        "is_fake": is_fake,
+                        "confidence": confidence,
+                        "face_count": metadata.get("face_count", 0),
+                        "processed_frames": metadata.get("processed_frames", 0),
+                        "detection_time": metadata.get("detection_time", 0.0),
+                        "model_used": metadata.get("model_used", "Heuristic")
+                    }
+                except Exception as detect_error:
+                    print(f"Error during deepfake detection: {str(detect_error)}")
+                    detection_info = {
+                        "error": "Detection failed",
+                        "message": str(detect_error)
+                    }
+            else:
+                detection_info = {"message": "Deepfake detection not requested"}
+            
             # Also create an analysis entry
             analysis = Analysis(
                 user=user,
                 video=video_file,
                 result=json.dumps({
-                    "is_fake": False,
-                    "confidence": 95.5,
-                    "video_id": video.Video_id
+                    "video_id": video.Video_id,
+                    "detection": detection_info if run_detection else None
                 })
             )
             
@@ -210,7 +250,8 @@ class VideoUploadTestView(APIView):
                     'duration': video.Length,
                     'fps': video.Frame_per_Second,
                     'size': video.size
-                }
+                },
+                'detection_result': detection_info if run_detection else None
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -619,6 +660,190 @@ class S3ObjectExistsView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class DeepFakeDetectionView(APIView):
+    """API endpoint for deepfake detection"""
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+    
+    def post(self, request, *args, **kwargs):
+        """Process a video for deepfake detection"""
+        video_file = request.FILES.get('video')
+        video_id = request.data.get('video_id')
+        
+        # Check if we have either a file or a valid video ID
+        if not video_file and not video_id:
+            return Response({
+                'error': 'Either video file or video_id must be provided'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Get the video object
+            video = None
+            
+            if video_id:
+                # Use existing video
+                try:
+                    video = Video.objects.get(Video_id=video_id, User_id=request.user)
+                except Video.DoesNotExist:
+                    return Response({
+                        'error': 'Video not found or access denied'
+                    }, status=status.HTTP_404_NOT_FOUND)
+            else:
+                # Upload a new video
+                user = request.user
+                
+                # Get video metadata
+                video_metadata = self._get_video_metadata(video_file)
+                
+                # Create video object
+                video = Video(
+                    User_id=user,
+                    Video_File=video_file,
+                    size=video_file.size,
+                    Length=video_metadata.get('duration', 0),
+                    Resolution=video_metadata.get('resolution', '0x0'),
+                    Frame_per_Second=video_metadata.get('fps', 0)
+                )
+                video.save()
+            
+            # Run detection
+            detection, is_fake, confidence, metadata = detect_deepfake(video)
+            
+            # Create detection model result
+            detection_model, created = Model.objects.get_or_create(
+                Name="Face-based Deepfake Detector",
+                Version="1.0",
+                Description="Basic deepfake detection using face analysis"
+            )
+            
+            detection_result = DetectionModel.objects.create(
+                Model_id=detection_model,
+                Result_id=detection,
+                Confidence=confidence,
+                Result='fake' if is_fake else 'real'
+            )
+            
+            # Format detection result for response
+            detection_info = {
+                "is_fake": is_fake,
+                "confidence": confidence,
+                "face_count": metadata.get("face_count", 0),
+                "processed_frames": metadata.get("processed_frames", 0),
+                "detection_time": metadata.get("detection_time", 0.0),
+                "result": 'fake' if is_fake else 'real'
+            }
+            
+            # Create an analysis entry
+            analysis = Analysis(
+                user=request.user,
+                video=video_file if video_file else None,
+                result=json.dumps({
+                    "video_id": video.Video_id,
+                    "detection": detection_info
+                })
+            )
+            analysis.save()
+            
+            # Return the results
+            return Response({
+                'success': True,
+                'video_id': video.Video_id,
+                'detection': detection_info,
+                'video_details': {
+                    'resolution': video.Resolution,
+                    'duration': video.Length,
+                    'fps': video.Frame_per_Second,
+                    'size': video.size
+                },
+                'thumbnail_url': video.Thumbnail.url if video.Thumbnail else None
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                'success': False,
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def _get_video_metadata(self, video_file):
+        """Extract metadata from video file (copied from VideoUploadTestView)"""
+        metadata = {
+            'duration': 0,
+            'resolution': '0x0',
+            'fps': 0
+        }
+        
+        try:
+            # Create a temporary file for FFprobe to analyze
+            with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_file.name)[1], delete=False) as temp_file:
+                # Save the uploaded file to the temporary file
+                for chunk in video_file.chunks():
+                    temp_file.write(chunk)
+                temp_file_path = temp_file.name
+            
+            # Use FFprobe to extract metadata
+            cmd = [
+                'ffprobe',
+                '-v', 'error',
+                '-select_streams', 'v:0',
+                '-show_entries', 'stream=width,height,r_frame_rate,duration',
+                '-of', 'json',
+                temp_file_path
+            ]
+            
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+                probe_data = json.loads(result.stdout)
+                
+                # Extract metadata
+                if 'streams' in probe_data and len(probe_data['streams']) > 0:
+                    stream = probe_data['streams'][0]
+                    
+                    # Get resolution
+                    width = stream.get('width', 0)
+                    height = stream.get('height', 0)
+                    metadata['resolution'] = f"{width}x{height}"
+                    
+                    # Get duration
+                    if 'duration' in stream:
+                        metadata['duration'] = int(float(stream['duration']))
+                    
+                    # Get FPS (frame rate)
+                    if 'r_frame_rate' in stream:
+                        frame_rate = stream['r_frame_rate']
+                        if '/' in frame_rate:
+                            num, den = frame_rate.split('/')
+                            metadata['fps'] = int(float(num) / float(den))
+                        else:
+                            metadata['fps'] = int(float(frame_rate))
+            except (subprocess.CalledProcessError, json.JSONDecodeError, ValueError) as e:
+                print(f"Error extracting metadata: {e}")
+                # Use some default values
+                metadata = {
+                    'duration': 10,
+                    'resolution': '640x480',
+                    'fps': 30
+                }
+            
+            # Clean up temporary file
+            os.unlink(temp_file_path)
+            
+            # Reset file pointer for further processing
+            video_file.seek(0)
+            
+        except Exception as e:
+            print(f"Error in metadata extraction: {e}")
+            # Use default values
+            metadata = {
+                'duration': 10,
+                'resolution': '640x480',
+                'fps': 30
+            }
+        
+        return metadata
+
+# ... existing code ...
+
 ### for account management
 class ChangePasswordView(APIView):
     """View for changing user password"""
