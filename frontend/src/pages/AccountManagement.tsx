@@ -46,6 +46,8 @@ export const AccountManagement = () => {
     const [errors, setErrors] = useState<ValidationError[]>([]);
     const [message, setMessage] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isPasswordChanging, setIsPasswordChanging] = useState(false);
+    const [isAccountDeleting, setIsAccountDeleting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletePassword, setDeletePassword] = useState('');
     const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
@@ -54,21 +56,32 @@ export const AccountManagement = () => {
     const validateForm = (): boolean => {
         const newErrors: ValidationError[] = [];
 
+        // Check if all fields are filled
+        if (!currentPassword) {
+            newErrors.push({ field: 'currentPassword', message: 'Current password is required' });
+        }
+
+        if (!newPassword) {
+            newErrors.push({ field: 'newPassword', message: 'New password is required' });
+        }
+
+        if (!confirmPassword) {
+            newErrors.push({ field: 'confirmPassword', message: 'Confirm password is required' });
+        }
+
+        // If all fields are filled, validate the password policy
         if (newPassword) {
             if (newPassword.length < 8) {
                 newErrors.push({ field: 'newPassword', message: 'Password must be at least 8 characters long' });
             }
             if (!/[a-zA-Z]/.test(newPassword)) {
-                newErrors.push({ field: 'newPassword', message: 'Password must contain at least 1 character' });
+                newErrors.push({ field: 'newPassword', message: 'Password must contain at least 1 letter' });
             }
         }
 
-        if (newPassword && newPassword !== confirmPassword) {
+        // Check if passwords match
+        if (newPassword && confirmPassword && newPassword !== confirmPassword) {
             newErrors.push({ field: 'confirmPassword', message: 'Passwords do not match' });
-        }
-
-        if (newPassword && !currentPassword) {
-            newErrors.push({ field: 'currentPassword', message: 'Current password is required to set a new password' });
         }
 
         setErrors(newErrors);
@@ -133,7 +146,7 @@ export const AccountManagement = () => {
         e.preventDefault();
         if (!validateForm()) return;
 
-        setIsLoading(true);
+        setIsPasswordChanging(true);
         setError(null);
         try {
             // Try both API path prefixes to handle deployment differences
@@ -159,20 +172,26 @@ export const AccountManagement = () => {
             setConfirmPassword('');
         } catch (error: any) {
             console.error('Update error:', error);
-            setError(error.response?.data?.error || `Error updating password: ${error.message}`);
+            // Specifically handle incorrect current password error
+            if (error.response?.data?.error === 'Current password is incorrect') {
+                setErrors(prev => [...prev.filter(e => e.field !== 'currentPassword'),
+                { field: 'currentPassword', message: 'Current password is incorrect' }]);
+            } else {
+                setError(error.response?.data?.error || `Error updating password: ${error.message}`);
+            }
         } finally {
-            setIsLoading(false);
+            setIsPasswordChanging(false);
         }
     };
 
     const handleDeleteAccount = async (e: React.FormEvent) => {
         e.preventDefault();
-        setIsLoading(true);
+        setIsAccountDeleting(true);
         setError(null);
 
         if (!deletePassword) {
             setError('Please enter your password to confirm account deletion');
-            setIsLoading(false);
+            setIsAccountDeleting(false);
             return;
         }
 
@@ -200,15 +219,26 @@ export const AccountManagement = () => {
             console.error('Error deleting account:', error);
             setError(error.response?.data?.error || `Error deleting account: ${error.message}`);
         } finally {
-            setIsLoading(false);
+            setIsAccountDeleting(false);
         }
     };
 
     if (isLoading && !userInfo) {
         return (
-            <div className="flex items-center justify-center min-h-screen">
-                <Loader2 className="h-8 w-8 animate-spin mr-2" />
-                <span className={isDarkMode ? 'text-white' : 'text-gray-800'}>Loading account information...</span>
+            <div className={`flex items-center justify-center min-h-screen w-full ${isDarkMode ? 'bg-[#222222]' : 'bg-gray-50'} ${isTransitioning ? 'theme-transitioning' : ''}`}>
+                {/* Theme Toggle Button - Fixed Position */}
+                <div className="fixed top-6 right-6 z-50">
+                    <ThemeToggle />
+                </div>
+
+                <div className="fixed bottom-0 left-1/2 transform -translate-x-1/2" style={{ zIndex: 0 }}>
+                    <GreenCircle />
+                </div>
+
+                <div className="flex flex-col items-center justify-center relative z-10">
+                    <Loader2 className={`h-10 w-10 animate-spin mb-4 ${isDarkMode ? 'text-green-500' : 'text-green-600'}`} />
+                    <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Loading account information...</span>
+                </div>
             </div>
         );
     }
@@ -348,10 +378,10 @@ export const AccountManagement = () => {
                                 </Button>
                                 <Button
                                     type="submit"
-                                    disabled={isLoading}
+                                    disabled={isPasswordChanging}
                                     className={`w-full auth-button ${isDarkMode ? 'text-white' : ''}`}
                                 >
-                                    {isLoading ? (
+                                    {isPasswordChanging ? (
                                         <div className="flex items-center justify-center">
                                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                                             Saving...
@@ -383,7 +413,7 @@ export const AccountManagement = () => {
                                     onClick={() => setIsDeleteDialogOpen(true)}
                                     className="w-full sm:w-fit"
                                 >
-                                    {isLoading ? (
+                                    {isAccountDeleting ? (
                                         <div className="flex items-center justify-center">
                                             <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
                                             Deleting...
@@ -426,9 +456,17 @@ export const AccountManagement = () => {
                         <Button
                             variant="destructive"
                             onClick={handleDeleteAccount}
+                            disabled={isAccountDeleting}
                             className="w-full"
                         >
-                            Delete Account
+                            {isAccountDeleting ? (
+                                <div className="flex items-center justify-center">
+                                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                    Deleting...
+                                </div>
+                            ) : (
+                                'Delete Account'
+                            )}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
