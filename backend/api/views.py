@@ -199,6 +199,15 @@ class VideoUploadTestView(APIView):
             video.save()
             logger.info(f"Video saved successfully with ID: {video.Video_id}")
             
+            # Store thumbnail URL and video details for response
+            thumbnail_url = video.Thumbnail.url if video.Thumbnail else None
+            video_details = {
+                'resolution': video.Resolution,
+                'duration': video.Length,
+                'fps': video.Frame_per_Second,
+                'size': video.size
+            }
+            
             # Initialize detection info with default values
             detection_info = {
                 "is_fake": False,
@@ -242,9 +251,13 @@ class VideoUploadTestView(APIView):
             }
             
             logger.info(f"Creating analysis with result data: {result_data}")
+            
+            # For S3 storage, we need to use the original file
+            # The video is already saved to S3 when we saved the Video object
+            # Django handles file uploads automatically
             analysis = Analysis(
                 user=user,
-                video=video_file,
+                video=video_file,  # This will be stored in S3
                 result=json.dumps(result_data)
             )
             
@@ -252,24 +265,31 @@ class VideoUploadTestView(APIView):
             analysis.save()
             logger.info(f"Analysis created with ID: {analysis.id}")
             
+            # Close the file handle to release memory - the file is already saved to S3
+            video_file.close()
+            
+            # Force garbage collection
+            import gc
+            gc.collect()
+            
             return Response({
                 'success': True,
                 'message': 'Video uploaded successfully',
                 'analysis_id': analysis.id,
                 'video_id': video.Video_id,
                 'video_path': video.Video_Path,
-                'thumbnail_path': video.Thumbnail.url if video.Thumbnail else None,
-                'video_details': {
-                    'resolution': video.Resolution,
-                    'duration': video.Length,
-                    'fps': video.Frame_per_Second,
-                    'size': video.size
-                },
+                'thumbnail_path': thumbnail_url,
+                'video_details': video_details,
                 'detection_result': detection_info
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
             logger.error(f"Error in VideoUploadTestView: {str(e)}", exc_info=True)
+            # Clean up video file from memory
+            if video_file:
+                video_file.close()
+                import gc
+                gc.collect()
             return Response({
                 'success': False,
                 'error': str(e)
@@ -731,6 +751,9 @@ class DeepFakeDetectionView(APIView):
                 video.save()
                 logger.info(f"New video created with ID: {video.Video_id}")
             
+            # Store thumbnail URL for response
+            thumbnail_url = video.Thumbnail.url if video.Thumbnail else None
+            
             # Process the video with our deepfake detector
             try:
                 logger.info(f"Starting deepfake detection for video ID: {video.Video_id}")
@@ -758,6 +781,8 @@ class DeepFakeDetectionView(APIView):
                 }
                 
                 logger.info(f"Creating analysis with result data: {result_data}")
+                
+                # Create new Analysis object with S3 storage
                 analysis = Analysis(
                     user=request.user,
                     video=video_file if video_file else None,
@@ -766,23 +791,39 @@ class DeepFakeDetectionView(APIView):
                 analysis.save()
                 logger.info(f"Analysis created with ID: {analysis.id}")
                 
+                # Get video details for response
+                video_details = {
+                    'resolution': video.Resolution,
+                    'duration': video.Length,
+                    'fps': video.Frame_per_Second,
+                    'size': video.size
+                }
+                
+                # Release file handle to free memory - the file is already saved to S3
+                if video_file:
+                    video_file.close()
+                    
+                # Force garbage collection
+                import gc
+                gc.collect()
+                
                 # Return the results
                 return Response({
                     'success': True,
                     'video_id': video.Video_id,
                     'detection': detection_info,
-                    'video_details': {
-                        'resolution': video.Resolution,
-                        'duration': video.Length,
-                        'fps': video.Frame_per_Second,
-                        'size': video.size
-                    },
-                    'thumbnail_url': video.Thumbnail.url if video.Thumbnail else None
+                    'video_details': video_details,
+                    'thumbnail_url': thumbnail_url
                 }, status=status.HTTP_200_OK)
                 
             except Exception as e:
                 # If deepfake detection fails, log error and return informative message
                 logger.error(f"Deepfake detection failed: {str(e)}", exc_info=True)
+                # Clean up video file from memory
+                if video_file:
+                    video_file.close()
+                    import gc
+                    gc.collect()
                 return Response({
                     'success': False,
                     'error': f"Deepfake detection failed: {str(e)}",
@@ -791,6 +832,11 @@ class DeepFakeDetectionView(APIView):
             
         except Exception as e:
             logger.error(f"Error in DeepFakeDetectionView: {str(e)}", exc_info=True)
+            # Clean up video file from memory
+            if video_file:
+                video_file.close()
+                import gc
+                gc.collect()
             return Response({
                 'success': False,
                 'error': str(e)

@@ -380,6 +380,8 @@ def detect_deepfake(video_obj):
     Returns the Detection object and detection results
     """
     logger.info(f"Starting deepfake detection for video ID: {video_obj.Video_id}")
+    temp_file_path = None
+    cap = None
     
     # Create a Detection object
     detection = Detection.objects.create(
@@ -430,11 +432,23 @@ def detect_deepfake(video_obj):
         with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_obj.Video_File.name)[1], delete=False) as temp_file:
             temp_file_path = temp_file.name
             
-            # Save the video directly to a temporary file
+            # Save the video to the temporary file
             logger.info(f"Processing video file: {video_obj.Video_File.name}")
+            chunk_count = 0
             for chunk in video_obj.Video_File.chunks():
                 temp_file.write(chunk)
+                chunk_count += 1
+                # Clear the chunk from memory immediately
+                chunk = None
+                if chunk_count % 10 == 0:
+                    # Force garbage collection periodically during large file downloads
+                    import gc
+                    gc.collect()
+            
             logger.info(f"Saved video to temporary file: {temp_file_path}")
+            
+            # Release the file handle to free up resources
+            temp_file.flush()
         
         start_time = time.time()
         
@@ -504,6 +518,19 @@ def detect_deepfake(video_obj):
                         label = 'deepfake' if prob > 0.5 else 'real'
                         results.append((frame_no, idx, label, prob))
                         logger.debug(f"Frame {frame_no}, Face {idx}: Final label: {label}")
+                
+                # Clear the frame from memory to reduce RAM usage
+                del frame
+                
+                # Periodic garbage collection
+                if frame_no % 50 == 0:
+                    import gc
+                    gc.collect()
+                    if HAS_DL_MODEL and hasattr(torch, 'cuda') and torch.cuda.is_available():
+                        try:
+                            torch.cuda.empty_cache()
+                        except:
+                            pass
             
             frame_no += 1
             
@@ -511,8 +538,12 @@ def detect_deepfake(video_obj):
             if frame_no > 300:  # Limit to 300 frames (30 processed frames at interval 10)
                 logger.info(f"Early stopping at frame {frame_no} to limit processing time")
                 break
+        
+        # Release video capture resources immediately
+        if cap is not None:
+            cap.release()
+            cap = None
             
-        cap.release()
         logger.info(f"Processed {frame_no} frames, found {total_clips} faces")
         
         # Calculate summaries
@@ -560,13 +591,21 @@ def detect_deepfake(video_obj):
         video_obj.isAnalyzed = True
         video_obj.save()
         
-        # Clean up temporary file
-        try:
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
-                logger.info(f"Removed temporary file: {temp_file_path}")
-        except Exception as e:
-            logger.warning(f"Failed to remove temporary file: {e}")
+        # Clear memory
+        all_probs = None
+        results = None
+        
+        # Force Python garbage collection
+        import gc
+        gc.collect()
+        
+        # If we're using PyTorch, also clear CUDA cache if available
+        if HAS_DL_MODEL and hasattr(torch, 'cuda') and torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+                logger.info("CUDA memory cache cleared")
+            except Exception as e:
+                logger.warning(f"Could not clear CUDA cache: {e}")
         
         return detection, is_fake, confidence, metadata
         
@@ -576,3 +615,28 @@ def detect_deepfake(video_obj):
         detection.delete()  # Remove the failed detection to avoid orphan records
         # Re-raise to let the calling code handle it
         raise 
+    finally:
+        # Clean up resources in the finally block to ensure they're always released
+        if cap is not None:
+            try:
+                cap.release()
+                logger.info("Video capture resource released")
+            except Exception as e:
+                logger.warning(f"Error releasing video capture: {e}")
+        
+        # Clean up temporary file
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+                logger.info(f"Removed temporary file: {temp_file_path}")
+            except Exception as e:
+                logger.warning(f"Failed to remove temporary file: {e}")
+                
+        # Clear Python memory again
+        import gc
+        gc.collect()
+        if HAS_DL_MODEL and hasattr(torch, 'cuda') and torch.cuda.is_available():
+            try:
+                torch.cuda.empty_cache()
+            except:
+                pass 
