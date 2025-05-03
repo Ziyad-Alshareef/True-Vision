@@ -29,6 +29,7 @@ export const SignUp = () => {
   });
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { isDarkMode, isTransitioning } = useTheme();
 
@@ -70,6 +71,7 @@ export const SignUp = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    setIsLoading(true);
     try {
       const response = await api.post('/api/signup/', formData);
       if (response.status === 201) {
@@ -81,6 +83,8 @@ export const SignUp = () => {
     } catch (error) {
       console.error('Signup error:', error);
       setErrors([{ field: 'general', message: 'Registration failed. Please try again.' }]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -171,8 +175,16 @@ export const SignUp = () => {
           <Button
             type="submit"
             className="auth-button"
+            disabled={isLoading}
           >
-            Sign up
+            {isLoading ? (
+              <div className="flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Signing up...
+              </div>
+            ) : (
+              'Sign up'
+            )}
           </Button>
 
           <div className="text-center text-sm">
