@@ -66,12 +66,16 @@ export const Login = () => {
 
     setIsLoading(true);
     try {
-      const response = await api.post<LoginResponse>('/api/token/', formData);
+      const dataToSend = {
+        ...formData,
+        username: formData.username.toLowerCase()
+      };
+      const response = await api.post<LoginResponse>('/api/token/', dataToSend);
       if (response.status === 200) {
         const data = response.data;
         localStorage.setItem('access', data.access);
         localStorage.setItem('refresh', data.refresh);
-        localStorage.setItem('username', formData.username);
+        localStorage.setItem('username', formData.username.toLowerCase());
         login();
         navigate('/dashboard');
       }

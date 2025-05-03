@@ -73,7 +73,12 @@ export const SignUp = () => {
 
     setIsLoading(true);
     try {
-      const response = await api.post('/api/signup/', formData);
+      const dataToSend = {
+        ...formData,
+        email: formData.email.toLowerCase(),
+        username: formData.username.toLowerCase()
+      };
+      const response = await api.post('/api/signup/', dataToSend);
       if (response.status === 201) {
         setSuccessMessage('Registration successful! Redirecting to login...');
         setTimeout(() => {
