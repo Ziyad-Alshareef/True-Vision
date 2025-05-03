@@ -190,14 +190,11 @@ if os.environ.get('AWS_ACCESS_KEY_ID'):
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# Frontend URL for password reset links
-FRONTEND_URL = os.environ.get('FRONTEND_URL', 'http://localhost:5173')
-
-# Email settings
+# Example email settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'TrueVision.DFD@gmail.com'
-EMAIL_HOST_PASSWORD = '?GST7w75'  # To be filled by user
-DEFAULT_FROM_EMAIL = 'TrueVision.DFD@gmail.com'
+EMAIL_HOST_USER = 'mawaqef.raqmnah@gmail.com'
+EMAIL_HOST_PASSWORD ='adwy azhh rtnw wcpw ' #'Raqmnah123'
+DEFAULT_FROM_EMAIL = 'mawaqef.raqmnah@gmail.com'

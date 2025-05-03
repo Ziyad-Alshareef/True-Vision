@@ -12,52 +12,22 @@ import './Auth.css';
 
 export const ResetPassword = () => {
   const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-  const { isDarkMode, isTransitioning } = useTheme();
 
-  const validateEmail = (email: string) => {
-    return email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/);
-  };
+  const [message, setMessage] = useState<string>('');
+  const { isDarkMode, isTransitioning } = useTheme();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Reset previous messages
-    setError(null);
-    setMessage(null);
-
-    // Validate email
-    if (!email) {
-      setError('Email is required');
-      return;
-    }
-
-    if (!validateEmail(email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    setIsLoading(true);
-
     try {
-      // Try both API path prefixes to handle deployment differences
-      let response;
-      try {
-        response = await api.post('/reset-password/request/', { email });
-      } catch (prefixError) {
-        console.log('Trying alternative path with /api prefix');
-        response = await api.post('/api/reset-password/request/', { email });
+      const response = await api.post('/api/reset-password/', email);
+      if (response.status === 200) {
+        setMessage('Password reset instructions sent to your email.');
       }
-
-      setMessage(response.data.message || 'Password reset instructions sent to your email.');
-    } catch (error: any) {
+    } catch (error) {
       console.error('Reset password error:', error);
-      setError(error.response?.data?.error || 'Error sending reset instructions. Please try again.');
-    } finally {
-      setIsLoading(false);
+      setMessage('Error sending reset instructions. Please try again.');
     }
+    // TODO: Implement """"real""either in backend or frontend whatevers right""" password reset logic
   };
 
   return (
@@ -82,22 +52,14 @@ export const ResetPassword = () => {
           </Link>
           <h2 className={`mt-8 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Reset your Password</h2>
           <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Enter your email address and we will send you instructions to reset your password.
+            Enter your Email address and we will send you instructions to reset your password.
           </p>
         </div>
-
         {message && (
-          <div className="mb-4 p-4 bg-green-600 text-white rounded-md">
+          <div className="mb-4 p-2 bg-green-600 text-white rounded">
             {message}
           </div>
         )}
-
-        {error && (
-          <div className="mb-4 p-4 bg-red-600 text-white rounded-md">
-            {error}
-          </div>
-        )}
-
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div>
             <Input
@@ -106,31 +68,19 @@ export const ResetPassword = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
-              disabled={isLoading}
             />
           </div>
 
           <Button
             type="submit"
             className="auth-button"
-            disabled={isLoading}
           >
-            {isLoading ? (
-              <div className="flex items-center justify-center">
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                Sending...
-              </div>
-            ) : (
-              'Reset password'
-            )}
+            Reset password
           </Button>
 
-          <div className="flex justify-between text-center">
-            <Link to="/login" className="text-[#097F4D] text-sm hover:text-[#076b41]">
-              Back to Login
-            </Link>
+          <div className="text-center">
             <Link to="/" className="text-[#097F4D] text-sm hover:text-[#076b41]">
-              Home page
+              Back to Home page
             </Link>
           </div>
         </form>
@@ -138,5 +88,68 @@ export const ResetPassword = () => {
     </div>
   );
 };
-
 export default ResetPassword;
+/*
+import React, { useState, FormEvent } from 'react';
+import { Link } from 'react-router-dom';
+import api from "../api";
+
+interface FormData {
+  email: string;
+}
+
+const ResetPassword: React.FC = () => {
+  const [formData, setFormData] = useState<FormData>({
+    email: ''
+  });
+  const [message, setMessage] = useState<string>('');
+
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    try {
+      const response = await api.post('/api/reset-password/', formData);
+      if (response.status === 200) {
+        setMessage('Password reset instructions sent to your email.');
+      }
+    } catch (error) {
+      console.error('Reset password error:', error);
+      setMessage('Error sending reset instructions. Please try again.');
+    }
+  };
+
+  return (
+    <div className="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg">
+      <h2 className="text-2xl font-bold mb-6 text-white">Reset Password</h2>
+      {message && (
+        <div className="mb-4 p-2 bg-green-600 text-white rounded">
+          {message}
+        </div>
+      )}
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <input
+            type="email"
+            placeholder="Email"
+            className="w-full p-2 rounded bg-gray-700 text-white"
+            value={formData.email}
+            onChange={(e) => setFormData({...formData, email: e.target.value})}
+          />
+        </div>
+        <button
+          type="submit"
+          className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
+        >
+          Send Reset Instructions
+        </button>
+      </form>
+      <div className="mt-4 text-center text-gray-400">
+        Remember your password?{' '}
+        <Link to="/login" className="text-green-500 hover:text-green-400">
+          Sign In
+        </Link>
+      </div>
+    </div>
+  );
+};
+
+export default ResetPassword; */

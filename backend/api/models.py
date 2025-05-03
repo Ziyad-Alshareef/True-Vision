@@ -115,8 +115,6 @@ class S3FrameStorage(S3Boto3Storage):
 
 class CustomUser(AbstractUser):
     """Custom user model extending Django's AbstractUser"""
-    reset_password_token = models.CharField(max_length=100, null=True, blank=True)
-    reset_password_token_expiry = models.DateTimeField(null=True, blank=True)
     reset_password_pin = models.CharField(max_length=6, blank=True, null=True)
     reset_password_pin_expiration = models.DateTimeField(blank=True, null=True)
     
