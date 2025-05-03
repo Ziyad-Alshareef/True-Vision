@@ -210,38 +210,50 @@ def preprocess_face(frame, box, size=(224, 224)):
         return np.zeros((3, size[0], size[1]), dtype=np.float32)
 
 def _download_models_if_needed():
-    """Download the face detection model files if they don't exist"""
+    """Use face detection model files from local random_files directory"""
     try:
-        import urllib.request
-        
         # Define paths relative to the backend directory
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        
+        # Path to random_files where models are stored
+        random_files_dir = os.path.join(backend_dir, 'random_files')
         model_dir = os.path.join(backend_dir, 'models')
-        prototxt_path = os.path.join(model_dir, 'deploy.prototxt')
-        model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
         
         # Create models directory if it doesn't exist
         os.makedirs(model_dir, exist_ok=True)
         
-        # URLs for the model files
-        prototxt_url = "https://raw.githubusercontent.com/opencv/opencv/master/samples/dnn/face_detector/deploy.prototxt"
-        model_url = "https://github.com/opencv/opencv_3rdparty/raw/dnn_samples_face_detector_20170830/res10_300x300_ssd_iter_140000.caffemodel"
+        # Source files in random_files
+        prototxt_src = os.path.join(random_files_dir, 'deploy.prototxt')
+        model_src = os.path.join(random_files_dir, 'res10.caffemodel')
+        efficientnet_src = os.path.join(random_files_dir, 'EfficientNet-b1_model.dat')
         
-        try:
-            # Download prototxt if needed
-            if not os.path.exists(prototxt_path):
-                logger.info(f"Downloading face detector prototxt to {prototxt_path}")
-                urllib.request.urlretrieve(prototxt_url, prototxt_path)
+        # Destination paths in models directory
+        prototxt_path = os.path.join(model_dir, 'deploy.prototxt')
+        model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
+        efficientnet_path = os.path.join(model_dir, 'EfficientNet-b1_model.dat')
+        
+        # Copy files from random_files to models directory if needed
+        import shutil
+        
+        if not os.path.exists(prototxt_path) and os.path.exists(prototxt_src):
+            logger.info(f"Copying face detector prototxt from {prototxt_src} to {prototxt_path}")
+            shutil.copy2(prototxt_src, prototxt_path)
+        
+        if not os.path.exists(model_path) and os.path.exists(model_src):
+            logger.info(f"Copying face detector model from {model_src} to {model_path}")
+            shutil.copy2(model_src, model_path)
             
-            # Download model if needed
-            if not os.path.exists(model_path):
-                logger.info(f"Downloading face detector model to {model_path}")
-                urllib.request.urlretrieve(model_url, model_path)
-                
-            return prototxt_path, model_path
-        except Exception as e:
-            logger.error(f"Error downloading models: {e}")
-            raise
+        if not os.path.exists(efficientnet_path) and os.path.exists(efficientnet_src):
+            logger.info(f"Copying EfficientNet model from {efficientnet_src} to {efficientnet_path}")
+            shutil.copy2(efficientnet_src, efficientnet_path)
+            
+        # If the model files don't exist in models dir and couldn't be copied from random_files,
+        # log a warning and return dummy paths for fallback mode
+        if not os.path.exists(prototxt_path) or not os.path.exists(model_path):
+            logger.warning("Model files not found in models dir and couldn't be copied from random_files")
+            return "dummy.prototxt", "dummy.caffemodel"
+            
+        return prototxt_path, model_path
     except Exception as e:
         logger.error(f"Error in _download_models_if_needed: {e}")
         # Return dummy paths for fallback mode
@@ -273,11 +285,11 @@ def detect_deepfake(video_obj):
         deepfake_model = None
         if HAS_DL_MODEL:
             try:
-                # This would be the path for a real model file
+                # Path for the model file in models directory
                 model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
                                        'models', 'EfficientNet-b1_model.dat')
                 
-                # Check if the model file exists (it won't in this prototype)
+                # Check if the model file exists
                 if os.path.exists(model_path):
                     # Initialize the model
                     deepfake_model = EffNetLSTM(2).to(TORCH_DEVICE)

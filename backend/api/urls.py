@@ -33,6 +33,9 @@ urlpatterns = [
     
     # Specific endpoint for deepfake API (for external integrations)
     path('api/deepfake/', DeepFakeDetectionView.as_view(), name='deepfake_api'),
+    
+    # Analyze existing video (by ID)
+    path('video/<int:video_id>/analyze/', DeepFakeDetectionView.as_view(), name='analyze_video'),
 ]
 
 

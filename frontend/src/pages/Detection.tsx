@@ -9,23 +9,12 @@ interface DetectionProps {
   onAnalysisComplete?: () => void;
 }
 
-interface DetectionResult {
-  is_fake: boolean;
-  confidence: number;
-  face_count: number;
-  processed_frames: number;
-  detection_time: number;
-  model_used: string;
-}
-
 export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element => {
   const { isDarkMode, isTransitioning } = useTheme();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [detectionResult, setDetectionResult] = useState<DetectionResult | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -47,8 +36,6 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
 
       setSelectedFile(file);
       setError(null);
-      // Reset any previous detection results
-      setDetectionResult(null);
     }
   };
 
@@ -71,8 +58,6 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
 
       setSelectedFile(file);
       setError(null);
-      // Reset any previous detection results
-      setDetectionResult(null);
     }
   };
 
@@ -92,12 +77,11 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
       setIsUploading(true);
       setUploadProgress(0);
       setError(null);
-      setDetectionResult(null);
-      setIsProcessing(true);
 
       const formData = new FormData();
       formData.append('video', selectedFile);
-      formData.append('detect_deepfake', 'true'); // Explicitly request deepfake detection
+      // Ensure deepfake detection is enabled
+      formData.append('detect_deepfake', 'true');
 
       // Make API request with upload progress
       const response = await api.post('/api/test/upload/', formData, {
@@ -115,11 +99,6 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
       // Check response and handle success
       if (response.status === 201) {
         console.log('Upload successful:', response.data);
-        
-        // Set detection result if available
-        if (response.data.detection_result) {
-          setDetectionResult(response.data.detection_result);
-        }
 
         // Store the video ID and other details
         if (response.data && response.data.video_id) {
@@ -176,15 +155,22 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
           }
         }
 
-        setIsProcessing(false);
+        // Pass data to dashboard
+        navigate('/dashboard', {
+          state: {
+            refresh: true,
+            lastUploadedVideoId: response.data?.video_id,
+            signedThumbnailUrl: localStorage.getItem('last_signed_thumbnail_url') ||
+              localStorage.getItem('last_api_signed_url')
+          }
+        });
 
-        // Note: We don't navigate away immediately so the user can see the result
-        // We'll add a button to view the result in the dashboard
+        // Call onAnalysisComplete when done
+        onAnalysisComplete?.();
       }
     } catch (error) {
       console.error('Upload error:', error);
       setError('Failed to upload and analyze video. Please try again.');
-      setIsProcessing(false);
     } finally {
       setIsUploading(false);
     }
@@ -193,26 +179,6 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
   // Handle click on upload area to trigger file input
   const handleUploadAreaClick = () => {
     fileInputRef.current?.click();
-  };
-
-  // Format confidence for display
-  const formatConfidence = (confidence: number) => {
-    return `${confidence.toFixed(1)}%`;
-  };
-
-  // Navigate to dashboard
-  const viewInDashboard = () => {
-    navigate('/dashboard', {
-      state: {
-        refresh: true,
-        lastUploadedVideoId: localStorage.getItem('last_uploaded_video_id'),
-        signedThumbnailUrl: localStorage.getItem('last_signed_thumbnail_url') || 
-          localStorage.getItem('last_api_signed_url')
-      }
-    });
-
-    // Call onAnalysisComplete when done
-    onAnalysisComplete?.();
   };
 
   return (
@@ -230,92 +196,35 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
         </h1>
         <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mb-12`}>Upload a video for deepfake detection</p>
 
-        {/* Detection Results */}
-        {detectionResult && (
-          <div className={`${isDarkMode ? 'bg-neutral-900' : 'bg-white'} p-6 rounded-lg shadow-md mb-8`}>
-            <h2 className={`text-xl font-semibold mb-4 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-              Detection Results
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className={`p-4 border ${isDarkMode ? 'border-neutral-700' : 'border-gray-200'} rounded-lg`}>
-                <h3 className={`text-lg font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Result
-                </h3>
-                <div className="flex items-center justify-center">
-                  <div className={`text-4xl font-bold ${detectionResult.is_fake ? 'text-red-500' : 'text-green-500'}`}>
-                    {detectionResult.is_fake ? 'FAKE' : 'REAL'}
-                  </div>
-                </div>
-                <div className={`mt-2 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                  Confidence: {formatConfidence(detectionResult.confidence)}
-                </div>
-              </div>
-              
-              <div className={`p-4 border ${isDarkMode ? 'border-neutral-700' : 'border-gray-200'} rounded-lg`}>
-                <h3 className={`text-lg font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
-                  Detection Details
-                </h3>
-                <div className={`${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <div className="flex justify-between py-1">
-                    <span>Faces detected:</span>
-                    <span>{detectionResult.face_count}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span>Frames analyzed:</span>
-                    <span>{detectionResult.processed_frames}</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span>Processing time:</span>
-                    <span>{detectionResult.detection_time.toFixed(2)}s</span>
-                  </div>
-                  <div className="flex justify-between py-1">
-                    <span>Model used:</span>
-                    <span>{detectionResult.model_used}</span>
-                  </div>
-                </div>
-              </div>
+        {/* Upload Area */}
+        <div
+          className={`border-2 border-dashed ${selectedFile ? 'border-[#097F4D]' : isDarkMode ? 'border-gray-600' : 'border-gray-300'} rounded-lg p-12 mb-8 cursor-pointer hover:border-[#097F4D] transition-colors ${isDarkMode ? 'bg-neutral-900/30' : 'bg-gray-50'}`}
+          onClick={handleUploadAreaClick}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+        >
+          {selectedFile ? (
+            <div className="text-center">
+              <p className="text-[#097F4D] font-medium">{selectedFile.name}</p>
+              <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm mt-2`}>
+                {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+              </p>
             </div>
-            
-            <Button 
-              onClick={viewInDashboard} 
-              className="mt-6 bg-[#097F4D] hover:bg-[#076b41] text-white"
-            >
-              View in Dashboard
-            </Button>
-          </div>
-        )}
+          ) : (
+            <div>
+              <p className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Drag and drop your video here, or click to upload</p>
+              <p className={`${isDarkMode ? 'text-gray-500' : 'text-gray-500'}  text-sm mt-2`}>Supported formats: MP4, MOV, AVI (Max: 100MB)</p>
+            </div>
+          )}
 
-        {/* Upload Area - Hide when showing results */}
-        {!detectionResult && (
-          <div
-            className={`border-2 border-dashed ${selectedFile ? 'border-[#097F4D]' : isDarkMode ? 'border-gray-600' : 'border-gray-300'} rounded-lg p-12 mb-8 cursor-pointer hover:border-[#097F4D] transition-colors ${isDarkMode ? 'bg-neutral-900/30' : 'bg-gray-50'}`}
-            onClick={handleUploadAreaClick}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-          >
-            {selectedFile ? (
-              <div className="text-center">
-                <p className="text-[#097F4D] font-medium">{selectedFile.name}</p>
-                <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-500'} text-sm mt-2`}>
-                  {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                </p>
-              </div>
-            ) : (
-              <div>
-                <p className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Drag and drop your video here, or click to upload</p>
-                <p className={`${isDarkMode ? 'text-gray-500' : 'text-gray-500'}  text-sm mt-2`}>Supported formats: MP4, MOV, AVI (Max: 100MB)</p>
-              </div>
-            )}
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              accept="video/*"
-              onChange={handleFileChange}
-            />
-          </div>
-        )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            accept="video/*"
+            onChange={handleFileChange}
+          />
+        </div>
 
         {/* Error message */}
         {error && (
@@ -337,40 +246,14 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
           </div>
         )}
 
-        {/* Processing indicator */}
-        {!isUploading && isProcessing && (
-          <div className="mb-6">
-            <div className="flex justify-center items-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#097F4D]"></div>
-            </div>
-            <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm mt-2`}>Processing video...</p>
-          </div>
-        )}
-
-        {/* Upload button - Hide when showing results */}
-        {!detectionResult && (
-          <Button
-            onClick={handleUpload}
-            disabled={!selectedFile || isUploading || isProcessing}
-            className="bg-[#097F4D] hover:bg-[#076b41] text-white px-8 py-2 mb-12 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isUploading ? 'Uploading...' : isProcessing ? 'Processing...' : 'Analyze Video'}
-          </Button>
-        )}
-
-        {/* Upload new video button - Show when showing results */}
-        {detectionResult && (
-          <Button
-            onClick={() => {
-              setDetectionResult(null);
-              setSelectedFile(null);
-              setError(null);
-            }}
-            className="bg-gray-500 hover:bg-gray-600 text-white px-8 py-2 mb-12"
-          >
-            Upload Another Video
-          </Button>
-        )}
+        {/* Upload button */}
+        <Button
+          onClick={handleUpload}
+          disabled={!selectedFile || isUploading}
+          className="bg-[#097F4D] hover:bg-[#076b41] text-white px-8 py-2 mb-12 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isUploading ? 'Uploading...' : 'Analyze Video'}
+        </Button>
 
         {/* Features */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
