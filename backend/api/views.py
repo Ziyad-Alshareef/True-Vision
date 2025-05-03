@@ -162,18 +162,27 @@ class VideoUploadTestView(APIView):
         video_file = request.FILES.get('video')
         run_detection = request.data.get('detect_deepfake', 'true').lower() == 'true'  # Default to true
         
+        print(f"[DEBUG] Video upload request received, detect_deepfake={run_detection}")
+        
         if not video_file:
+            print("[DEBUG] No video file provided in request")
             return Response({'error': 'No video file provided'}, 
                            status=status.HTTP_400_BAD_REQUEST)
+        
+        print(f"[DEBUG] Got video file: {video_file.name}, size: {video_file.size} bytes")
         
         try:
             # Use the currently authenticated user
             user = request.user
+            print(f"[DEBUG] Processing upload for user: {user.username}")
             
             # Get video metadata using FFprobe
+            print("[DEBUG] Extracting video metadata...")
             video_metadata = self.get_video_metadata(video_file)
+            print(f"[DEBUG] Video metadata: {video_metadata}")
             
             # Create a proper Video object instead of just an Analysis
+            print("[DEBUG] Creating Video object...")
             video = Video(
                 User_id=user,
                 Video_File=video_file,
@@ -184,16 +193,22 @@ class VideoUploadTestView(APIView):
             )
             
             # Save the video (this will trigger the save method that generates thumbnail)
+            print("[DEBUG] Saving video to S3...")
             video.save()
+            print(f"[DEBUG] Video saved successfully with ID: {video.Video_id}")
             
             detection_result = None
             # Run deepfake detection if requested
             if run_detection:
                 try:
+                    print("[DEBUG] Starting deepfake detection...")
                     # Run detection and get results
                     detection, is_fake, confidence, metadata = detect_deepfake(video)
+                    print(f"[DEBUG] Detection results: is_fake={is_fake}, confidence={confidence}")
+                    print(f"[DEBUG] Detection metadata: {metadata}")
                     
                     # Create detection model result
+                    print("[DEBUG] Creating detection model record...")
                     detection_model, created = Model.objects.get_or_create(
                         Name="Face-based Deepfake Detector",
                         Version="1.0",
@@ -206,6 +221,7 @@ class VideoUploadTestView(APIView):
                         Confidence=confidence,
                         Result='fake' if is_fake else 'real'
                     )
+                    print(f"[DEBUG] Detection model record created with ID: {detection_result.pk}")
                     
                     # Format the detection result for the response
                     detection_info = {
@@ -217,12 +233,13 @@ class VideoUploadTestView(APIView):
                         "model_used": metadata.get("model_used", "Heuristic")
                     }
                 except Exception as detect_error:
-                    print(f"Error during deepfake detection: {str(detect_error)}")
+                    print(f"[ERROR] Deepfake detection failed: {str(detect_error)}")
                     detection_info = {
                         "error": "Detection failed",
                         "message": str(detect_error)
                     }
             else:
+                print("[DEBUG] Deepfake detection not requested")
                 detection_info = {"message": "Deepfake detection not requested"}
             
             # Also create an analysis entry

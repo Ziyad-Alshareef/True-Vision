@@ -167,20 +167,41 @@ except ImportError as e:
 # Function to detect face locations
 def detect_face_locations(frame, net, conf_thresh=0.5):
     try:
+        logger.debug("Starting face detection")
         h, w = frame.shape[:2]
+        logger.debug(f"Frame dimensions: {w}x{h}")
+        
+        # Create blob from the frame
+        logger.debug("Creating blob from frame")
         blob = cv2.dnn.blobFromImage(frame, 1.0, (300, 300), (104, 177, 123),
                                      swapRB=False, crop=False)
         net.setInput(blob)
+        
+        # Run the network
+        logger.debug("Running face detection network")
         dets = net.forward()
+        logger.debug(f"Network returned {dets.shape[2]} potential detections")
+        
         boxes = []
         for i in range(dets.shape[2]):
             conf = float(dets[0, 0, i, 2])
             if conf < conf_thresh:
                 continue
+                
+            # Get box coordinates and convert to pixels
             x1, y1, x2, y2 = (dets[0, 0, i, 3:7] * np.array([w, h, w, h])).astype(int)
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(w, x2), min(h, y2)
+            
+            # Ensure the box has valid dimensions
+            if x2 <= x1 or y2 <= y1:
+                logger.debug(f"Skipping invalid box: ({x1}, {y1}, {x2}, {y2})")
+                continue
+                
+            logger.debug(f"Face detected with confidence {conf:.4f} at ({x1}, {y1}, {x2}, {y2})")
             boxes.append((x1, y1, x2, y2))
+            
+        logger.debug(f"Total valid faces detected: {len(boxes)}")
         return boxes
     except Exception as e:
         logger.error(f"Error in face detection: {e}")
@@ -210,49 +231,144 @@ def preprocess_face(frame, box, size=(224, 224)):
         return np.zeros((3, size[0], size[1]), dtype=np.float32)
 
 def _download_models_if_needed():
-    """Use face detection model files from local random_files directory"""
+    """Use face detection model files from local directories"""
     try:
         # Define paths relative to the backend directory
         backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         
-        # Path to random_files where models are stored
-        random_files_dir = os.path.join(backend_dir, 'random_files')
-        model_dir = os.path.join(backend_dir, 'models')
+        # Possible locations to check for model files
+        possible_locations = [
+            os.path.join(backend_dir, 'random_files'),
+            os.path.join(backend_dir, 'models'),
+            backend_dir,  # Root backend directory
+        ]
+        
+        logger.info(f"Backend dir: {backend_dir}")
+        
+        # Search for model files in possible locations
+        prototxt_src = None
+        model_src = None
+        efficientnet_src = None
+        
+        # Look for the files in all possible locations
+        for location in possible_locations:
+            logger.info(f"Checking for model files in: {location}")
+            
+            # Check for prototxt file
+            prototxt_candidates = [
+                os.path.join(location, 'deploy.prototxt'),
+                os.path.join(location, 'face_deploy.prototxt'),
+                os.path.join(location, 'face_detection.prototxt')
+            ]
+            for candidate in prototxt_candidates:
+                if os.path.exists(candidate):
+                    prototxt_src = candidate
+                    logger.info(f"Found prototxt file: {prototxt_src}")
+                    break
+            
+            # Check for model file
+            model_candidates = [
+                os.path.join(location, 'res10.caffemodel'),
+                os.path.join(location, 'res10_300x300_ssd_iter_140000.caffemodel'),
+                os.path.join(location, 'face_model.caffemodel')
+            ]
+            for candidate in model_candidates:
+                if os.path.exists(candidate):
+                    model_src = candidate
+                    logger.info(f"Found face model file: {model_src}")
+                    break
+            
+            # Check for EfficientNet model
+            efficientnet_candidates = [
+                os.path.join(location, 'EfficientNet-b1_model.dat'),
+                os.path.join(location, 'deepfake_model.dat'),
+                os.path.join(location, 'efficientnet.dat')
+            ]
+            for candidate in efficientnet_candidates:
+                if os.path.exists(candidate):
+                    efficientnet_src = candidate
+                    logger.info(f"Found EfficientNet model file: {efficientnet_src}")
+                    break
         
         # Create models directory if it doesn't exist
+        model_dir = os.path.join(backend_dir, 'models')
         os.makedirs(model_dir, exist_ok=True)
-        
-        # Source files in random_files
-        prototxt_src = os.path.join(random_files_dir, 'deploy.prototxt')
-        model_src = os.path.join(random_files_dir, 'res10.caffemodel')
-        efficientnet_src = os.path.join(random_files_dir, 'EfficientNet-b1_model.dat')
         
         # Destination paths in models directory
         prototxt_path = os.path.join(model_dir, 'deploy.prototxt')
         model_path = os.path.join(model_dir, 'res10_300x300_ssd_iter_140000.caffemodel')
         efficientnet_path = os.path.join(model_dir, 'EfficientNet-b1_model.dat')
         
-        # Copy files from random_files to models directory if needed
+        # If we found source files, copy them to the models directory
         import shutil
         
-        if not os.path.exists(prototxt_path) and os.path.exists(prototxt_src):
+        if prototxt_src and not os.path.exists(prototxt_path):
             logger.info(f"Copying face detector prototxt from {prototxt_src} to {prototxt_path}")
             shutil.copy2(prototxt_src, prototxt_path)
         
-        if not os.path.exists(model_path) and os.path.exists(model_src):
+        if model_src and not os.path.exists(model_path):
             logger.info(f"Copying face detector model from {model_src} to {model_path}")
             shutil.copy2(model_src, model_path)
             
-        if not os.path.exists(efficientnet_path) and os.path.exists(efficientnet_src):
+        if efficientnet_src and not os.path.exists(efficientnet_path):
             logger.info(f"Copying EfficientNet model from {efficientnet_src} to {efficientnet_path}")
             shutil.copy2(efficientnet_src, efficientnet_path)
             
-        # If the model files don't exist in models dir and couldn't be copied from random_files,
-        # log a warning and return dummy paths for fallback mode
+        # If the required model files don't exist in models dir, try to extract them from zip file
+        if (not os.path.exists(prototxt_path) or not os.path.exists(model_path)) and os.path.exists(os.path.join(backend_dir, 'random files-20250503T203536Z-001.zip')):
+            try:
+                import zipfile
+                zip_path = os.path.join(backend_dir, 'random files-20250503T203536Z-001.zip')
+                logger.info(f"Trying to extract model files from zip: {zip_path}")
+                
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    # Extract all files to a temporary directory
+                    temp_dir = os.path.join(backend_dir, 'temp_extract')
+                    os.makedirs(temp_dir, exist_ok=True)
+                    zip_ref.extractall(temp_dir)
+                    
+                    # Look for model files in the extracted directory
+                    for root, dirs, files in os.walk(temp_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            
+                            # Check if this is a prototxt file
+                            if 'deploy' in file.lower() and file.endswith('.prototxt') and not os.path.exists(prototxt_path):
+                                logger.info(f"Found prototxt in zip: {file_path}")
+                                shutil.copy2(file_path, prototxt_path)
+                                
+                            # Check if this is a caffemodel file
+                            if 'res10' in file.lower() and file.endswith('.caffemodel') and not os.path.exists(model_path):
+                                logger.info(f"Found caffemodel in zip: {file_path}")
+                                shutil.copy2(file_path, model_path)
+                                
+                            # Check if this is an EfficientNet model file
+                            if 'efficient' in file.lower() and file.endswith('.dat') and not os.path.exists(efficientnet_path):
+                                logger.info(f"Found EfficientNet model in zip: {file_path}")
+                                shutil.copy2(file_path, efficientnet_path)
+            except Exception as e:
+                logger.error(f"Error extracting from zip file: {e}")
+        
+        # If we're still missing required files, fallback to default implementation
         if not os.path.exists(prototxt_path) or not os.path.exists(model_path):
-            logger.warning("Model files not found in models dir and couldn't be copied from random_files")
-            return "dummy.prototxt", "dummy.caffemodel"
+            logger.warning("Model files not found in any location. Using fallback implementation.")
             
+            # Check if we need to create a simple face detection model
+            if not os.path.exists(prototxt_path):
+                logger.info("Creating minimal prototxt file")
+                with open(prototxt_path, 'w') as f:
+                    f.write("""
+                    name: "SSD Face Detection"
+                    input: "data"
+                    input_shape {
+                        dim: 1 dim: 3 dim: 300 dim: 300
+                    }
+                    """)
+                
+            # Return paths (they might be dummy files)
+            return prototxt_path, model_path
+        
+        logger.info(f"Using model files: {prototxt_path}, {model_path}")
         return prototxt_path, model_path
     except Exception as e:
         logger.error(f"Error in _download_models_if_needed: {e}")
@@ -276,6 +392,7 @@ def detect_deepfake(video_obj):
         prototxt_path, model_path = _download_models_if_needed()
         
         # Load the SSD face detector (CPU only)
+        logger.info(f"Loading face detection model from: {prototxt_path}, {model_path}")
         face_net = cv2.dnn.readNetFromCaffe(prototxt_path, model_path)
         face_net.setPreferableBackend(cv2.dnn.DNN_BACKEND_DEFAULT)
         face_net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
@@ -289,8 +406,10 @@ def detect_deepfake(video_obj):
                 model_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
                                        'models', 'EfficientNet-b1_model.dat')
                 
+                logger.info(f"Checking for EfficientNet model at: {model_path}")
                 # Check if the model file exists
                 if os.path.exists(model_path):
+                    logger.info("EfficientNet model file found, loading model...")
                     # Initialize the model
                     deepfake_model = EffNetLSTM(2).to(TORCH_DEVICE)
                     # Load the state dictionary
@@ -303,12 +422,15 @@ def detect_deepfake(video_obj):
             except Exception as e:
                 logger.error(f"Error loading deepfake detection model: {e}")
                 logger.info("Falling back to heuristic detection")
+        else:
+            logger.warning("Deep learning model dependencies not available, using heuristic detection")
         
         # Create a temporary file for processing
         with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_obj.Video_File.name)[1], delete=False) as temp_file:
             temp_file_path = temp_file.name
             
             # Download the file from S3
+            logger.info(f"Downloading video from S3: {video_obj.Video_File.name}")
             for chunk in video_obj.Video_File.chunks():
                 temp_file.write(chunk)
             logger.info(f"Downloaded video to temporary file: {temp_file_path}")
@@ -316,6 +438,7 @@ def detect_deepfake(video_obj):
         start_time = time.time()
         
         # Process the video
+        logger.info(f"Opening video file with OpenCV: {temp_file_path}")
         cap = cv2.VideoCapture(temp_file_path)
         if not cap.isOpened():
             logger.error(f"Failed to open video file: {temp_file_path}")
@@ -342,18 +465,23 @@ def detect_deepfake(video_obj):
         while True:
             ret, frame = cap.read()
             if not ret:
+                logger.info(f"End of video reached after {frame_no} frames")
                 break
                 
             # Process only at the sampling interval
             if frame_no % sample_interval == 0:
+                logger.debug(f"Processing frame {frame_no}")
                 boxes = detect_face_locations(frame, face_net, conf_thresh=0.6)
                 
                 if not boxes:
+                    logger.debug(f"Frame {frame_no}: No faces detected")
                     results.append((frame_no, 'no_face'))
                 else:
+                    logger.debug(f"Frame {frame_no}: Detected {len(boxes)} faces")
                     for idx, box in enumerate(boxes):
                         # If we have the deep learning model, use it for detection
                         if deepfake_model is not None:
+                            logger.debug(f"Frame {frame_no}, Face {idx}: Using deep learning model")
                             # Preprocess the face for the model
                             face_tensor = preprocess_face(frame, box)
                             # Convert to PyTorch tensor
@@ -365,7 +493,9 @@ def detect_deepfake(video_obj):
                             
                             # Get the probability
                             prob = torch.softmax(logits, dim=1)[0, 1].item()  # deepfake probability
+                            logger.debug(f"Frame {frame_no}, Face {idx}: DL model result - probability: {prob:.4f}")
                         else:
+                            logger.debug(f"Frame {frame_no}, Face {idx}: Using heuristic detection")
                             # Use a simple heuristic if no model is available
                             # Extract face features for heuristic analysis
                             x1, y1, x2, y2 = box
@@ -373,10 +503,73 @@ def detect_deepfake(video_obj):
                             face_height = y2 - y1
                             aspect_ratio = face_width / max(face_height, 1)
                             
-                            # Heuristic: Check if face aspect ratio is unusual
+                            # Extract the face region
+                            face = frame[y1:y2, x1:x2]
+                            
+                            # Basic heuristic approach:
+                            # 1. Check face aspect ratio (too narrow or too wide)
+                            # 2. Check face symmetry
+                            # 3. Check color distribution
+                            
+                            # Initialize probability
                             prob = 0.3  # Default probability
-                            if aspect_ratio < 0.7 or aspect_ratio > 1.5:
-                                prob = 0.6
+                            
+                            # Aspect ratio check (normal face is roughly 0.75-1.2)
+                            if aspect_ratio < 0.7 or aspect_ratio > 1.3:
+                                prob += 0.15
+                                logger.debug(f"Abnormal aspect ratio: {aspect_ratio:.2f}")
+                            
+                            # Check face symmetry if face is large enough
+                            if face.shape[0] > 50 and face.shape[1] > 50:
+                                try:
+                                    # Convert to grayscale for symmetry check
+                                    if len(face.shape) > 2:
+                                        gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+                                    else:
+                                        gray_face = face
+                                        
+                                    # Flip the face horizontally
+                                    flipped_face = cv2.flip(gray_face, 1)
+                                    
+                                    # Calculate the absolute difference between the face and its mirror
+                                    diff = cv2.absdiff(gray_face, flipped_face)
+                                    
+                                    # Calculate the mean difference (asymmetry score)
+                                    asymmetry = np.mean(diff) / 255.0
+                                    
+                                    logger.debug(f"Face asymmetry score: {asymmetry:.4f}")
+                                    
+                                    # High asymmetry is suspicious
+                                    if asymmetry > 0.2:
+                                        prob += 0.15
+                                except Exception as e:
+                                    logger.error(f"Error in symmetry check: {e}")
+                            
+                            # Check for unusual smoothness (common in deepfakes)
+                            try:
+                                if len(face.shape) > 2:
+                                    # Convert to grayscale
+                                    gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+                                    
+                                    # Apply Laplacian filter to detect edges
+                                    laplacian = cv2.Laplacian(gray_face, cv2.CV_64F)
+                                    
+                                    # Calculate variance of Laplacian (measure of texture/sharpness)
+                                    variance = np.var(laplacian)
+                                    
+                                    logger.debug(f"Laplacian variance (sharpness): {variance:.2f}")
+                                    
+                                    # Low variance means the image is smooth/blurry
+                                    if variance < 100:
+                                        prob += 0.1
+                                        
+                                    # Very high variance can indicate artificial sharpening
+                                    if variance > 1000:
+                                        prob += 0.1
+                            except Exception as e:
+                                logger.error(f"Error in smoothness check: {e}")
+                            
+                            logger.debug(f"Frame {frame_no}, Face {idx}: Heuristic result - final probability: {prob:.4f}")
                         
                         # Record results
                         all_probs.append(prob)
@@ -386,6 +579,7 @@ def detect_deepfake(video_obj):
                             
                         label = 'deepfake' if prob > 0.5 else 'real'
                         results.append((frame_no, idx, label, prob))
+                        logger.debug(f"Frame {frame_no}, Face {idx}: Final label: {label}")
             
             frame_no += 1
             
@@ -405,7 +599,7 @@ def detect_deepfake(video_obj):
             logger.info(f"Detection stats: avg_prob={avg_prob:.2f}, max_prob={max_prob:.2f}, deepfake_pct={deepfake_pct:.2f}%")
         else:
             avg_prob = max_prob = deepfake_pct = 0.0
-            logger.warning("No faces detected in video")
+            logger.warning("No faces detected in video, returning default values of 0")
             
         # Determine if the video is fake based on thresholds
         is_fake = max_prob > 0.7 or (avg_prob > 0.5 and deepfake_pct > 30)

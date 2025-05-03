@@ -13,6 +13,12 @@ from PIL import Image
 import io
 from PIL import ImageEnhance
 from PIL import ImageDraw
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+import logging
+
+# Get a logger for this file
+logger = logging.getLogger(__name__)
 
 # Add this function to get the ffmpeg executable path
 def get_ffmpeg_path():
@@ -595,6 +601,46 @@ class Analysis(models.Model):
         except:
             return {}
         
+@receiver(post_save, sender=Video)
+def run_deepfake_detection(sender, instance, created, **kwargs):
+    """
+    Signal handler to run deepfake detection after a video is saved.
+    Only runs if the video hasn't been analyzed yet.
+    """
+    if not instance.isAnalyzed and instance.Video_File:
+        from .detector import detect_deepfake
+        from django.db import transaction
+        
+        logger.info(f"Running deepfake detection for video ID {instance.Video_id}")
+        try:
+            # Run detection in a separate transaction to avoid conflicts
+            with transaction.atomic():
+                # Get the model
+                from .models import Model, DetectionModel
+                detection_model, created = Model.objects.get_or_create(
+                    Name="Face-based Deepfake Detector",
+                    Version="1.0",
+                    Description="Basic deepfake detection using face analysis"
+                )
+                
+                # Run detection
+                detection, is_fake, confidence, metadata = detect_deepfake(instance)
+                
+                # Create the detection result
+                DetectionModel.objects.create(
+                    Model_id=detection_model,
+                    Result_id=detection,
+                    Confidence=confidence,
+                    Result='fake' if is_fake else 'real'
+                )
+                
+                # Mark the video as analyzed
+                instance.isAnalyzed = True
+                instance.save(update_fields=['isAnalyzed'])
+                
+                logger.info(f"Deepfake detection completed for video ID {instance.Video_id}: is_fake={is_fake}, confidence={confidence}")
+        except Exception as e:
+            logger.error(f"Error running deepfake detection for video ID {instance.Video_id}: {str(e)}")
 '''from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import transaction, OperationalError
@@ -821,3 +867,4 @@ class Analysis(models.Model):
     class Meta:
         ordering = ['-created_at']
 '''
+
