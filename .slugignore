@@ -1,1 +1,7 @@
 frontend/
+
+node_modules/
+*.md
+*.log
+__pycache__/
+tests/
