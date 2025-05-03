@@ -160,30 +160,31 @@ class VideoUploadTestView(APIView):
     
     def post(self, request, *args, **kwargs):
         """Handle video upload and storage in S3"""
+        logger = logging.getLogger(__name__)
         video_file = request.FILES.get('video')
         run_detection = request.data.get('detect_deepfake', 'true').lower() == 'true'  # Default to true
         
-        print(f"[DEBUG] Video upload request received, detect_deepfake={run_detection}")
+        logger.info(f"Video upload request received, detect_deepfake={run_detection}")
         
         if not video_file:
-            print("[DEBUG] No video file provided in request")
+            logger.error("No video file provided in request")
             return Response({'error': 'No video file provided'}, 
                            status=status.HTTP_400_BAD_REQUEST)
         
-        print(f"[DEBUG] Got video file: {video_file.name}, size: {video_file.size} bytes")
+        logger.info(f"Got video file: {video_file.name}, size: {video_file.size} bytes")
         
         try:
             # Use the currently authenticated user
             user = request.user
-            print(f"[DEBUG] Processing upload for user: {user.username}")
+            logger.info(f"Processing upload for user: {user.username}")
             
             # Get video metadata using FFprobe
-            print("[DEBUG] Extracting video metadata...")
+            logger.info("Extracting video metadata...")
             video_metadata = self.get_video_metadata(video_file)
-            print(f"[DEBUG] Video metadata: {video_metadata}")
+            logger.info(f"Video metadata: {video_metadata}")
             
             # Create a proper Video object instead of just an Analysis
-            print("[DEBUG] Creating Video object...")
+            logger.info("Creating Video object...")
             video = Video(
                 User_id=user,
                 Video_File=video_file,
@@ -194,9 +195,9 @@ class VideoUploadTestView(APIView):
             )
             
             # Save the video (this will trigger the save method that generates thumbnail)
-            print("[DEBUG] Saving video...")
+            logger.info("Saving video...")
             video.save()
-            print(f"[DEBUG] Video saved successfully with ID: {video.Video_id}")
+            logger.info(f"Video saved successfully with ID: {video.Video_id}")
             
             # Initialize detection info with default values
             detection_info = {
@@ -211,7 +212,7 @@ class VideoUploadTestView(APIView):
             # If detection was requested, run deepfake detection
             if run_detection:
                 try:
-                    print("[DEBUG] Running deepfake detection...")
+                    logger.info("Running deepfake detection...")
                     detection, is_fake, confidence, metadata = detect_deepfake(video)
                     
                     detection_info = {
@@ -223,27 +224,33 @@ class VideoUploadTestView(APIView):
                         "result": 'fake' if is_fake else 'real',
                         "model_used": metadata.get("model_used", "EfficientNet-B1 + LSTM")
                     }
-                    print(f"[DEBUG] Detection completed: {detection_info}")
+                    logger.info(f"Detection completed: {detection_info}")
                     
                 except Exception as e:
-                    print(f"[ERROR] Deepfake detection failed: {str(e)}")
+                    logger.error(f"Deepfake detection failed: {str(e)}", exc_info=True)
                     # Keep default detection info on error
                     detection_info["error"] = str(e)
             else:
-                print("[DEBUG] Deepfake detection not requested")
+                logger.info("Deepfake detection not requested")
             
-            # Also create an analysis entry
+            # Create an analysis entry with properly formatted result data
+            result_data = {
+                "video_id": video.Video_id,
+                "is_fake": detection_info.get("is_fake", False),
+                "confidence": detection_info.get("confidence", 0.0),
+                "detection": detection_info
+            }
+            
+            logger.info(f"Creating analysis with result data: {result_data}")
             analysis = Analysis(
                 user=user,
                 video=video_file,
-                result=json.dumps({
-                    "video_id": video.Video_id,
-                    "detection": detection_info if run_detection else None
-                })
+                result=json.dumps(result_data)
             )
             
             # Save the analysis
             analysis.save()
+            logger.info(f"Analysis created with ID: {analysis.id}")
             
             return Response({
                 'success': True,
@@ -262,6 +269,7 @@ class VideoUploadTestView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
+            logger.error(f"Error in VideoUploadTestView: {str(e)}", exc_info=True)
             return Response({
                 'success': False,
                 'error': str(e)
@@ -675,11 +683,15 @@ class DeepFakeDetectionView(APIView):
     
     def post(self, request, *args, **kwargs):
         """Process a video for deepfake detection"""
+        logger = logging.getLogger(__name__)
+        logger.info("DeepFakeDetectionView.post called")
+        
         video_file = request.FILES.get('video')
         video_id = request.data.get('video_id')
         
         # Check if we have either a file or a valid video ID
         if not video_file and not video_id:
+            logger.error("No video file or video_id provided")
             return Response({
                 'error': 'Either video file or video_id must be provided'
             }, status=status.HTTP_400_BAD_REQUEST)
@@ -691,17 +703,21 @@ class DeepFakeDetectionView(APIView):
             if video_id:
                 # Use existing video
                 try:
+                    logger.info(f"Using existing video with ID: {video_id}")
                     video = Video.objects.get(Video_id=video_id, User_id=request.user)
                 except Video.DoesNotExist:
+                    logger.error(f"Video with ID {video_id} not found or access denied")
                     return Response({
                         'error': 'Video not found or access denied'
                     }, status=status.HTTP_404_NOT_FOUND)
             else:
                 # Upload a new video
                 user = request.user
+                logger.info(f"Uploading new video for user: {user.username}")
                 
                 # Get video metadata
                 video_metadata = self._get_video_metadata(video_file)
+                logger.info(f"Video metadata: {video_metadata}")
                 
                 # Create video object
                 video = Video(
@@ -713,10 +729,14 @@ class DeepFakeDetectionView(APIView):
                     Frame_per_Second=video_metadata.get('fps', 0)
                 )
                 video.save()
+                logger.info(f"New video created with ID: {video.Video_id}")
             
             # Process the video with our deepfake detector
             try:
+                logger.info(f"Starting deepfake detection for video ID: {video.Video_id}")
                 detection, is_fake, confidence, metadata = detect_deepfake(video)
+                logger.info(f"Detection completed: is_fake={is_fake}, confidence={confidence}")
+                logger.info(f"Detection metadata: {metadata}")
                 
                 # Format detection result for response
                 detection_info = {
@@ -729,16 +749,22 @@ class DeepFakeDetectionView(APIView):
                     "model_used": metadata.get("model_used", "EfficientNet-B1 + LSTM")
                 }
                 
-                # Create an analysis entry
+                # Create an analysis entry with properly formatted result data
+                result_data = {
+                    "video_id": video.Video_id,
+                    "is_fake": is_fake,
+                    "confidence": confidence,
+                    "detection": detection_info
+                }
+                
+                logger.info(f"Creating analysis with result data: {result_data}")
                 analysis = Analysis(
                     user=request.user,
                     video=video_file if video_file else None,
-                    result=json.dumps({
-                        "video_id": video.Video_id,
-                        "detection": detection_info
-                    })
+                    result=json.dumps(result_data)
                 )
                 analysis.save()
+                logger.info(f"Analysis created with ID: {analysis.id}")
                 
                 # Return the results
                 return Response({
@@ -756,8 +782,7 @@ class DeepFakeDetectionView(APIView):
                 
             except Exception as e:
                 # If deepfake detection fails, log error and return informative message
-                logger = logging.getLogger(__name__)
-                logger.error(f"Deepfake detection failed: {str(e)}")
+                logger.error(f"Deepfake detection failed: {str(e)}", exc_info=True)
                 return Response({
                     'success': False,
                     'error': f"Deepfake detection failed: {str(e)}",
@@ -765,6 +790,7 @@ class DeepFakeDetectionView(APIView):
                 }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         except Exception as e:
+            logger.error(f"Error in DeepFakeDetectionView: {str(e)}", exc_info=True)
             return Response({
                 'success': False,
                 'error': str(e)
