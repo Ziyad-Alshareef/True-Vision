@@ -1,1 +1,1 @@
-web: cd backend && gunicorn backend.wsgi --log-file -
+web: cd backend && gunicorn backend.wsgi --log-file -web: cd backend && gunicorn backend.wsgi --log-file - --max-requests 30 --max-requests-jitter 10 --timeout 60
