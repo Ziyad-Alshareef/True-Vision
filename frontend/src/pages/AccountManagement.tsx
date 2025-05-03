@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
@@ -15,6 +15,9 @@ import {
     DialogHeader,
     DialogTitle,
 } from "../components/ui/dialog";
+import api from '../api';
+import { useAuth } from '../context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
 interface ValidationError {
     field: string;
@@ -26,11 +29,17 @@ interface UserData {
     username: string;
 }
 
+interface UserInfo {
+    username: string;
+    email: string;
+}
+
 export const AccountManagement = () => {
     const navigate = useNavigate();
     const { isDarkMode, isTransitioning } = useTheme();
-    const [username, setUsername] = useState('User'); // TODO: Replace with actual user data
-    const [email, setEmail] = useState('user@example.com'); // TODO: Replace with actual user data
+    const { logout } = useAuth();
+    const [username, setUsername] = useState('User');
+    const [email, setEmail] = useState('user@example.com');
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -39,6 +48,8 @@ export const AccountManagement = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletePassword, setDeletePassword] = useState('');
+    const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     const validateForm = (): boolean => {
         const newErrors: ValidationError[] = [];
@@ -68,40 +79,139 @@ export const AccountManagement = () => {
         return errors.find(error => error.field === field)?.message;
     };
 
+    useEffect(() => {
+        const fetchUserInfo = async () => {
+            // Check if we have a token
+            const token = localStorage.getItem('access');
+            if (!token) {
+                setError('Please log in to view your account information');
+                setTimeout(() => {
+                    navigate('/login');
+                }, 2000);
+                return;
+            }
+
+            setIsLoading(true);
+            try {
+                // Try both API path prefixes to handle deployment differences
+                let response;
+                try {
+                    response = await api.get('/user/info/');
+                } catch (prefixError) {
+                    console.log('Trying alternative path with /api prefix');
+                    response = await api.get('/api/user/info/');
+                }
+
+                if (response.data) {
+                    setUserInfo(response.data);
+                    setUsername(response.data.username);
+                    setEmail(response.data.email);
+                    setError(null);
+                } else {
+                    setError('No user data received');
+                }
+            } catch (error: any) {
+                console.error('Error fetching user info:', error);
+                if (error.response?.status === 401) {
+                    setError('Your session has expired. Please log in again.');
+                    logout();
+                    setTimeout(() => {
+                        navigate('/login');
+                    }, 2000);
+                } else {
+                    setError(`Error loading user information: ${error.message}`);
+                }
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchUserInfo();
+    }, [navigate, logout]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!validateForm()) return;
 
         setIsLoading(true);
+        setError(null);
         try {
-            // TODO: Implement password update logic
+            // Try both API path prefixes to handle deployment differences
+            let response;
+            try {
+                response = await api.post('/user/change-password/', {
+                    currentPassword,
+                    newPassword,
+                    confirmPassword
+                });
+            } catch (prefixError) {
+                console.log('Trying alternative path with /api prefix');
+                response = await api.post('/api/user/change-password/', {
+                    currentPassword,
+                    newPassword,
+                    confirmPassword
+                });
+            }
+
             setMessage('Password updated successfully!');
             setCurrentPassword('');
             setNewPassword('');
             setConfirmPassword('');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Update error:', error);
-            setMessage('Error updating password. Please try again.');
+            setError(error.response?.data?.error || `Error updating password: ${error.message}`);
         } finally {
             setIsLoading(false);
         }
     };
 
-    const handleDeleteAccount = async () => {
+    const handleDeleteAccount = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+        setError(null);
+
         if (!deletePassword) {
-            setMessage('Please enter your password to confirm account deletion');
+            setError('Please enter your password to confirm account deletion');
+            setIsLoading(false);
             return;
         }
 
         try {
-            // TODO: Implement account deletion logic
+            // Try both API path prefixes to handle deployment differences
+            let response;
+            try {
+                response = await api.post('/user/delete-account/', {
+                    password: deletePassword
+                });
+            } catch (prefixError) {
+                console.log('Trying alternative path with /api prefix');
+                response = await api.post('/api/user/delete-account/', {
+                    password: deletePassword
+                });
+            }
+
+            // Clear all storage and redirect
             localStorage.removeItem('access');
             localStorage.removeItem('refresh');
+            localStorage.removeItem('username');
+            logout();
             navigate('/');
-        } catch (error) {
-            setMessage('Error deleting account. Please try again.');
+        } catch (error: any) {
+            console.error('Error deleting account:', error);
+            setError(error.response?.data?.error || `Error deleting account: ${error.message}`);
+        } finally {
+            setIsLoading(false);
         }
     };
+
+    if (isLoading && !userInfo) {
+        return (
+            <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin mr-2" />
+                <span className={isDarkMode ? 'text-white' : 'text-gray-800'}>Loading account information...</span>
+            </div>
+        );
+    }
 
     return (
         <div className={`min-h-screen w-full ${isDarkMode ? 'bg-[#222222]' : 'bg-gray-50'} flex flex-col ${isTransitioning ? 'theme-transitioning' : ''}`}>
@@ -138,6 +248,14 @@ export const AccountManagement = () => {
                         </div>
                     )}
 
+                    {error && (
+                        <div className="p-4 mb-6 rounded bg-red-600 text-white">
+                            <div className="flex items-center">
+                                <span className="font-medium">{error}</span>
+                            </div>
+                        </div>
+                    )}
+
                     <div className={`p-6 rounded-lg ${isDarkMode ? 'bg-neutral-900' : 'bg-white'} shadow-lg`}>
                         <form onSubmit={handleSubmit} className="space-y-6">
                             <div className="space-y-4">
@@ -147,7 +265,7 @@ export const AccountManagement = () => {
                                     </label>
                                     <Input
                                         type="text"
-                                        value={username}
+                                        value={userInfo?.username || username}
                                         disabled
                                         className={`${isDarkMode ? 'bg-neutral-800 border-neutral-700 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'}`}
                                     />
@@ -159,7 +277,7 @@ export const AccountManagement = () => {
                                     </label>
                                     <Input
                                         type="email"
-                                        value={email}
+                                        value={userInfo?.email || email}
                                         disabled
                                         className={`${isDarkMode ? 'bg-neutral-800 border-neutral-700 text-gray-300' : 'bg-gray-100 border-gray-200 text-gray-700'}`}
                                     />
@@ -233,7 +351,14 @@ export const AccountManagement = () => {
                                     disabled={isLoading}
                                     className={`w-full auth-button ${isDarkMode ? 'text-white' : ''}`}
                                 >
-                                    {isLoading ? 'Saving...' : 'Save Changes'}
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center">
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                            Saving...
+                                        </div>
+                                    ) : (
+                                        'Save Changes'
+                                    )}
                                 </Button>
                             </div>
                         </form>
@@ -258,7 +383,14 @@ export const AccountManagement = () => {
                                     onClick={() => setIsDeleteDialogOpen(true)}
                                     className="w-full sm:w-fit"
                                 >
-                                    Delete Account
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center">
+                                            <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                                            Deleting...
+                                        </div>
+                                    ) : (
+                                        'Delete Account'
+                                    )}
                                 </Button>
                             </div>
                         </div>

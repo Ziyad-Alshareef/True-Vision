@@ -3,7 +3,7 @@ from rest_framework import generics, viewsets
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, authenticate
 from .models import Analysis, Video, Model, Detection, DetectionModel, CustomUser
 from .serializers import CustomUserSerializer, AnalysisSerializer, VideoSerializer
 from rest_framework.parsers import MultiPartParser, FormParser
@@ -619,6 +619,85 @@ class S3ObjectExistsView(APIView):
             return Response({
                 'error': str(e)
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+### for account management
+class ChangePasswordView(APIView):
+    """View for changing user password"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        current_password = request.data.get('currentPassword')
+        new_password = request.data.get('newPassword')
+        confirm_password = request.data.get('confirmPassword')
+
+        # Validate input
+        if not all([current_password, new_password, confirm_password]):
+            return Response(
+                {"error": "All fields are required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if new_password != confirm_password:
+            return Response(
+                {"error": "New passwords do not match"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verify current password
+        user = authenticate(username=request.user.username, password=current_password)
+        if not user:
+            return Response(
+                {"error": "Current password is incorrect"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Set new password
+        user.set_password(new_password)
+        user.save()
+
+        return Response(
+            {"message": "Password updated successfully"},
+            status=status.HTTP_200_OK
+        )
+
+class DeleteAccountView(APIView):
+    """View for deleting user account"""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        password = request.data.get('password')
+
+        if not password:
+            return Response(
+                {"error": "Password is required"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Verify password
+        user = authenticate(username=request.user.username, password=password)
+        if not user:
+            return Response(
+                {"error": "Incorrect password"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Delete user account
+        user.delete()
+
+        return Response(
+            {"message": "Account deleted successfully"},
+            status=status.HTTP_200_OK
+        )
+
+class UserInfoView(APIView):
+    """View for retrieving user information"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        return Response({
+            "username": user.username,
+            "email": user.email
+        })
 
 '''from django.shortcuts import render
 from api.models import User
