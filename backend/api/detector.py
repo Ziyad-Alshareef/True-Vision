@@ -156,12 +156,11 @@ try:
         HAS_DL_MODEL = True
         
     except ImportError as e:
-        logger.warning(f"EfficientNet not available: {e}. Using heuristic detection instead.")
+        logger.warning(f"EfficientNet not available: {e}")
         HAS_DL_MODEL = False
         
 except ImportError as e:
-    # If PyTorch is not available, fall back to basic detection
-    logger.warning(f"PyTorch not available: {e}. Using heuristic detection instead.")
+    logger.warning(f"PyTorch not available: {e}")
     HAS_DL_MODEL = False
 
 # Function to detect face locations
@@ -398,7 +397,7 @@ def detect_deepfake(video_obj):
         face_net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
         logger.info("Face detection model loaded successfully")
         
-        # Try to load the deepfake detection model if available
+        # Try to load the deepfake detection model
         deepfake_model = None
         if HAS_DL_MODEL:
             try:
@@ -418,22 +417,24 @@ def detect_deepfake(video_obj):
                     deepfake_model.eval()
                     logger.info("Successfully loaded deepfake detection model")
                 else:
-                    logger.warning(f"Deepfake model file not found at {model_path}, using heuristic detection")
+                    logger.error(f"Deepfake model file not found at {model_path}")
+                    raise Exception("Deepfake detection model not found")
             except Exception as e:
                 logger.error(f"Error loading deepfake detection model: {e}")
-                logger.info("Falling back to heuristic detection")
+                raise Exception(f"Failed to load deepfake detection model: {e}")
         else:
-            logger.warning("Deep learning model dependencies not available, using heuristic detection")
+            logger.error("Deep learning model dependencies not available")
+            raise Exception("Deep learning model dependencies not available")
         
         # Create a temporary file for processing
         with tempfile.NamedTemporaryFile(suffix=os.path.splitext(video_obj.Video_File.name)[1], delete=False) as temp_file:
             temp_file_path = temp_file.name
             
-            # Download the file from S3
-            logger.info(f"Downloading video from S3: {video_obj.Video_File.name}")
+            # Save the video directly to a temporary file
+            logger.info(f"Processing video file: {video_obj.Video_File.name}")
             for chunk in video_obj.Video_File.chunks():
                 temp_file.write(chunk)
-            logger.info(f"Downloaded video to temporary file: {temp_file_path}")
+            logger.info(f"Saved video to temporary file: {temp_file_path}")
         
         start_time = time.time()
         
@@ -479,97 +480,20 @@ def detect_deepfake(video_obj):
                 else:
                     logger.debug(f"Frame {frame_no}: Detected {len(boxes)} faces")
                     for idx, box in enumerate(boxes):
-                        # If we have the deep learning model, use it for detection
-                        if deepfake_model is not None:
-                            logger.debug(f"Frame {frame_no}, Face {idx}: Using deep learning model")
-                            # Preprocess the face for the model
-                            face_tensor = preprocess_face(frame, box)
-                            # Convert to PyTorch tensor
-                            inp = torch.from_numpy(face_tensor).unsqueeze(0).unsqueeze(1).to(TORCH_DEVICE)
-                            
-                            # Run inference
-                            with torch.no_grad():
-                                fmap, logits = deepfake_model(inp)
-                            
-                            # Get the probability
-                            prob = torch.softmax(logits, dim=1)[0, 1].item()  # deepfake probability
-                            logger.debug(f"Frame {frame_no}, Face {idx}: DL model result - probability: {prob:.4f}")
-                        else:
-                            logger.debug(f"Frame {frame_no}, Face {idx}: Using heuristic detection")
-                            # Use a simple heuristic if no model is available
-                            # Extract face features for heuristic analysis
-                            x1, y1, x2, y2 = box
-                            face_width = x2 - x1
-                            face_height = y2 - y1
-                            aspect_ratio = face_width / max(face_height, 1)
-                            
-                            # Extract the face region
-                            face = frame[y1:y2, x1:x2]
-                            
-                            # Basic heuristic approach:
-                            # 1. Check face aspect ratio (too narrow or too wide)
-                            # 2. Check face symmetry
-                            # 3. Check color distribution
-                            
-                            # Initialize probability
-                            prob = 0.3  # Default probability
-                            
-                            # Aspect ratio check (normal face is roughly 0.75-1.2)
-                            if aspect_ratio < 0.7 or aspect_ratio > 1.3:
-                                prob += 0.15
-                                logger.debug(f"Abnormal aspect ratio: {aspect_ratio:.2f}")
-                            
-                            # Check face symmetry if face is large enough
-                            if face.shape[0] > 50 and face.shape[1] > 50:
-                                try:
-                                    # Convert to grayscale for symmetry check
-                                    if len(face.shape) > 2:
-                                        gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-                                    else:
-                                        gray_face = face
-                                        
-                                    # Flip the face horizontally
-                                    flipped_face = cv2.flip(gray_face, 1)
-                                    
-                                    # Calculate the absolute difference between the face and its mirror
-                                    diff = cv2.absdiff(gray_face, flipped_face)
-                                    
-                                    # Calculate the mean difference (asymmetry score)
-                                    asymmetry = np.mean(diff) / 255.0
-                                    
-                                    logger.debug(f"Face asymmetry score: {asymmetry:.4f}")
-                                    
-                                    # High asymmetry is suspicious
-                                    if asymmetry > 0.2:
-                                        prob += 0.15
-                                except Exception as e:
-                                    logger.error(f"Error in symmetry check: {e}")
-                            
-                            # Check for unusual smoothness (common in deepfakes)
-                            try:
-                                if len(face.shape) > 2:
-                                    # Convert to grayscale
-                                    gray_face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-                                    
-                                    # Apply Laplacian filter to detect edges
-                                    laplacian = cv2.Laplacian(gray_face, cv2.CV_64F)
-                                    
-                                    # Calculate variance of Laplacian (measure of texture/sharpness)
-                                    variance = np.var(laplacian)
-                                    
-                                    logger.debug(f"Laplacian variance (sharpness): {variance:.2f}")
-                                    
-                                    # Low variance means the image is smooth/blurry
-                                    if variance < 100:
-                                        prob += 0.1
-                                        
-                                    # Very high variance can indicate artificial sharpening
-                                    if variance > 1000:
-                                        prob += 0.1
-                            except Exception as e:
-                                logger.error(f"Error in smoothness check: {e}")
-                            
-                            logger.debug(f"Frame {frame_no}, Face {idx}: Heuristic result - final probability: {prob:.4f}")
+                        # Use the deep learning model for detection
+                        logger.debug(f"Frame {frame_no}, Face {idx}: Using deep learning model")
+                        # Preprocess the face for the model
+                        face_tensor = preprocess_face(frame, box)
+                        # Convert to PyTorch tensor
+                        inp = torch.from_numpy(face_tensor).unsqueeze(0).unsqueeze(1).to(TORCH_DEVICE)
+                        
+                        # Run inference
+                        with torch.no_grad():
+                            fmap, logits = deepfake_model(inp)
+                        
+                        # Get the probability
+                        prob = torch.softmax(logits, dim=1)[0, 1].item()  # deepfake probability
+                        logger.debug(f"Frame {frame_no}, Face {idx}: DL model result - probability: {prob:.4f}")
                         
                         # Record results
                         all_probs.append(prob)
@@ -619,7 +543,7 @@ def detect_deepfake(video_obj):
             "avg_probability": avg_prob,
             "max_probability": max_prob,
             "detection_time": elapsed_time,
-            "model_used": "EfficientNet-B1 + LSTM" if deepfake_model is not None else "Heuristic",
+            "model_used": "EfficientNet-B1 + LSTM",
             "video_dimensions": f"{width}x{height}",
             "video_fps": fps
         }

@@ -20,6 +20,7 @@ from django.http import HttpResponse
 import mimetypes
 # Import the deepfake detector
 from .detector import detect_deepfake
+import logging
 
 # Get the user model (now points to CustomUser)
 User = get_user_model()
@@ -193,54 +194,43 @@ class VideoUploadTestView(APIView):
             )
             
             # Save the video (this will trigger the save method that generates thumbnail)
-            print("[DEBUG] Saving video to S3...")
+            print("[DEBUG] Saving video...")
             video.save()
             print(f"[DEBUG] Video saved successfully with ID: {video.Video_id}")
             
-            detection_result = None
-            # Run deepfake detection if requested
+            # Initialize detection info with default values
+            detection_info = {
+                "is_fake": False,
+                "confidence": 0.0,
+                "face_count": 0,
+                "processed_frames": 0,
+                "detection_time": 0.0,
+                "model_used": "No Detection Run"
+            }
+            
+            # If detection was requested, run deepfake detection
             if run_detection:
                 try:
-                    print("[DEBUG] Starting deepfake detection...")
-                    # Run detection and get results
+                    print("[DEBUG] Running deepfake detection...")
                     detection, is_fake, confidence, metadata = detect_deepfake(video)
-                    print(f"[DEBUG] Detection results: is_fake={is_fake}, confidence={confidence}")
-                    print(f"[DEBUG] Detection metadata: {metadata}")
                     
-                    # Create detection model result
-                    print("[DEBUG] Creating detection model record...")
-                    detection_model, created = Model.objects.get_or_create(
-                        Name="Face-based Deepfake Detector",
-                        Version="1.0",
-                        Description="Basic deepfake detection using face analysis"
-                    )
-                    
-                    detection_result = DetectionModel.objects.create(
-                        Model_id=detection_model,
-                        Result_id=detection,
-                        Confidence=confidence,
-                        Result='fake' if is_fake else 'real'
-                    )
-                    print(f"[DEBUG] Detection model record created with ID: {detection_result.pk}")
-                    
-                    # Format the detection result for the response
                     detection_info = {
                         "is_fake": is_fake,
                         "confidence": confidence,
-                        "face_count": metadata.get("face_count", 0),
+                        "face_count": metadata.get("processed_faces", 0),
                         "processed_frames": metadata.get("processed_frames", 0),
                         "detection_time": metadata.get("detection_time", 0.0),
-                        "model_used": metadata.get("model_used", "Heuristic")
+                        "result": 'fake' if is_fake else 'real',
+                        "model_used": metadata.get("model_used", "EfficientNet-B1 + LSTM")
                     }
-                except Exception as detect_error:
-                    print(f"[ERROR] Deepfake detection failed: {str(detect_error)}")
-                    detection_info = {
-                        "error": "Detection failed",
-                        "message": str(detect_error)
-                    }
+                    print(f"[DEBUG] Detection completed: {detection_info}")
+                    
+                except Exception as e:
+                    print(f"[ERROR] Deepfake detection failed: {str(e)}")
+                    # Keep default detection info on error
+                    detection_info["error"] = str(e)
             else:
                 print("[DEBUG] Deepfake detection not requested")
-                detection_info = {"message": "Deepfake detection not requested"}
             
             # Also create an analysis entry
             analysis = Analysis(
@@ -268,7 +258,7 @@ class VideoUploadTestView(APIView):
                     'fps': video.Frame_per_Second,
                     'size': video.size
                 },
-                'detection_result': detection_info if run_detection else None
+                'detection_result': detection_info
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
@@ -724,57 +714,55 @@ class DeepFakeDetectionView(APIView):
                 )
                 video.save()
             
-            # Run detection
-            detection, is_fake, confidence, metadata = detect_deepfake(video)
-            
-            # Create detection model result
-            detection_model, created = Model.objects.get_or_create(
-                Name="Face-based Deepfake Detector",
-                Version="1.0",
-                Description="Basic deepfake detection using face analysis"
-            )
-            
-            detection_result = DetectionModel.objects.create(
-                Model_id=detection_model,
-                Result_id=detection,
-                Confidence=confidence,
-                Result='fake' if is_fake else 'real'
-            )
-            
-            # Format detection result for response
-            detection_info = {
-                "is_fake": is_fake,
-                "confidence": confidence,
-                "face_count": metadata.get("face_count", 0),
-                "processed_frames": metadata.get("processed_frames", 0),
-                "detection_time": metadata.get("detection_time", 0.0),
-                "result": 'fake' if is_fake else 'real'
-            }
-            
-            # Create an analysis entry
-            analysis = Analysis(
-                user=request.user,
-                video=video_file if video_file else None,
-                result=json.dumps({
-                    "video_id": video.Video_id,
-                    "detection": detection_info
-                })
-            )
-            analysis.save()
-            
-            # Return the results
-            return Response({
-                'success': True,
-                'video_id': video.Video_id,
-                'detection': detection_info,
-                'video_details': {
-                    'resolution': video.Resolution,
-                    'duration': video.Length,
-                    'fps': video.Frame_per_Second,
-                    'size': video.size
-                },
-                'thumbnail_url': video.Thumbnail.url if video.Thumbnail else None
-            }, status=status.HTTP_200_OK)
+            # Process the video with our deepfake detector
+            try:
+                detection, is_fake, confidence, metadata = detect_deepfake(video)
+                
+                # Format detection result for response
+                detection_info = {
+                    "is_fake": is_fake,
+                    "confidence": confidence,
+                    "face_count": metadata.get("processed_faces", 0),
+                    "processed_frames": metadata.get("processed_frames", 0),
+                    "detection_time": metadata.get("detection_time", 0.0),
+                    "result": 'fake' if is_fake else 'real',
+                    "model_used": metadata.get("model_used", "EfficientNet-B1 + LSTM")
+                }
+                
+                # Create an analysis entry
+                analysis = Analysis(
+                    user=request.user,
+                    video=video_file if video_file else None,
+                    result=json.dumps({
+                        "video_id": video.Video_id,
+                        "detection": detection_info
+                    })
+                )
+                analysis.save()
+                
+                # Return the results
+                return Response({
+                    'success': True,
+                    'video_id': video.Video_id,
+                    'detection': detection_info,
+                    'video_details': {
+                        'resolution': video.Resolution,
+                        'duration': video.Length,
+                        'fps': video.Frame_per_Second,
+                        'size': video.size
+                    },
+                    'thumbnail_url': video.Thumbnail.url if video.Thumbnail else None
+                }, status=status.HTTP_200_OK)
+                
+            except Exception as e:
+                # If deepfake detection fails, log error and return informative message
+                logger = logging.getLogger(__name__)
+                logger.error(f"Deepfake detection failed: {str(e)}")
+                return Response({
+                    'success': False,
+                    'error': f"Deepfake detection failed: {str(e)}",
+                    'video_id': video.Video_id,
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             
         except Exception as e:
             return Response({
