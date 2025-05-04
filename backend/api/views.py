@@ -16,7 +16,7 @@ import json
 import tempfile
 import subprocess
 import requests
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 import mimetypes
 # Import the deepfake detector
 from .detector import detect_deepfake
@@ -576,7 +576,7 @@ class S3ImageProxyView(APIView):
             # Use the original URL if no signed URL was generated
             url_to_fetch = signed_url if signed_url else url
             
-            # Make request to the URL
+            # Make request to the URL with stream=True to avoid loading entire content into memory
             response = requests.get(url_to_fetch, stream=True)
             
             # Check if request was successful
@@ -592,9 +592,24 @@ class S3ImageProxyView(APIView):
                 if not content_type:
                     content_type = 'application/octet-stream'
             
-            # Create Django response with streamed content
-            django_response = HttpResponse(
-                response.iter_content(chunk_size=1024),
+            # Create Django StreamingHttpResponse to avoid keeping the entire image in memory
+            
+            # Use a generator function to yield chunks and clean up resources
+            def stream_and_cleanup():
+                try:
+                    # Stream content in small chunks
+                    for chunk in response.iter_content(chunk_size=8192):
+                        yield chunk
+                finally:
+                    # Always close the response and clear references
+                    response.close()
+                    # Force garbage collection
+                    import gc
+                    gc.collect()
+            
+            # Create streaming response
+            django_response = StreamingHttpResponse(
+                stream_and_cleanup(),
                 content_type=content_type
             )
             
@@ -619,8 +634,21 @@ class S3ImageProxyView(APIView):
             response = requests.get(placeholder_url, stream=True)
             
             if response.status_code == 200:
-                django_response = HttpResponse(
-                    response.iter_content(chunk_size=1024),
+                # Use StreamingHttpResponse for the placeholder too
+                from django.http import StreamingHttpResponse
+                
+                # Stream content with cleanup
+                def stream_placeholder():
+                    try:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            yield chunk
+                    finally:
+                        response.close()
+                        import gc
+                        gc.collect()
+                
+                django_response = StreamingHttpResponse(
+                    stream_placeholder(),
                     content_type=response.headers.get('Content-Type', 'image/png')
                 )
                 
@@ -641,6 +669,10 @@ class S3ImageProxyView(APIView):
                 {"error": f"Failed to serve placeholder: {str(placeholder_error)}"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        finally:
+            # Ensure cleanup
+            import gc
+            gc.collect()
 
 class S3ObjectExistsView(APIView):
     """Check if an S3 object exists without downloading it"""
