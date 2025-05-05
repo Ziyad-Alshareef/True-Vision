@@ -473,7 +473,7 @@ def detect_deepfake(video_obj):
         results = []
         
         # Process video frames
-        sample_interval = 10  # Sample every 10th frame to speed up processing
+        sample_interval = 3  # Sample every 10th frame to speed up processing
         
         logger.info(f"Starting frame analysis with sample interval: {sample_interval}")
         
