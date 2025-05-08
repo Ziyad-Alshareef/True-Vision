@@ -1093,6 +1093,95 @@ class UserInfoView(APIView):
             "email": user.email
         })
 
+class ForgotPasswordView(APIView):
+    """View for sending password reset PIN to user's email"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        if not email:
+            return Response(
+                {"error": "Email is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = CustomUser.objects.get(email=email)
+            
+            # Generate PIN
+            pin = user.generate_reset_pin()
+            
+            # Send email with the PIN
+            from django.core.mail import send_mail
+            
+            send_mail(
+                'True Vision - Password Reset PIN',
+                f'Your PIN is {pin}. It is valid for 10 minutes.',
+                'no-reply@true-vision.app',
+                [user.email],
+                fail_silently=False,
+            )
+            
+            return Response(
+                {"message": "PIN sent to your email"}, 
+                status=status.HTTP_200_OK
+            )
+        except CustomUser.DoesNotExist:
+            # For security reasons, don't reveal that the email doesn't exist
+            return Response(
+                {"message": "If your email exists in our system, you will receive a PIN."}, 
+                status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+class ResetPasswordView(APIView):
+    """View for resetting password using PIN"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        email = request.data.get('email')
+        pin = request.data.get('pin')
+        new_password = request.data.get('new_password')
+        
+        if not all([email, pin, new_password]):
+            return Response(
+                {"error": "Email, PIN, and new password are required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        try:
+            user = CustomUser.objects.get(email=email)
+            
+            if user.is_reset_pin_valid(pin):
+                user.set_password(new_password)
+                user.clear_reset_pin()
+                user.save()
+                
+                return Response(
+                    {"message": "Password reset successful"}, 
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {"error": "Invalid or expired PIN"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except CustomUser.DoesNotExist:
+            return Response(
+                {"error": "Email not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 '''from django.shortcuts import render
 from api.models import User
 from rest_framework.views import APIView

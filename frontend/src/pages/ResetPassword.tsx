@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import api from "../api";
@@ -12,22 +12,70 @@ import './Auth.css';
 
 export const ResetPassword = () => {
   const [email, setEmail] = useState('');
-
+  const [pin, setPin] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [stage, setStage] = useState('requestPin'); // 'requestPin' or 'resetPassword'
   const [message, setMessage] = useState<string>('');
+  const [error, setError] = useState<string>('');
   const { isDarkMode, isTransitioning } = useTheme();
+  const navigate = useNavigate();
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleRequestPin = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const response = await api.post('/api/reset-password/', email);
-      if (response.status === 200) {
-        setMessage('Password reset instructions sent to your email.');
-      }
-    } catch (error) {
-      console.error('Reset password error:', error);
-      setMessage('Error sending reset instructions. Please try again.');
+    setError('');
+    setMessage('');
+    
+    if (!email) {
+      setError('Email is required');
+      return;
     }
-    // TODO: Implement """"real""either in backend or frontend whatevers right""" password reset logic
+    
+    try {
+      const response = await api.post('/api/forgot-password/', { email });
+      if (response.status === 200) {
+        setMessage(response.data.message || 'PIN sent to your email.');
+        setStage('resetPassword');
+      }
+    } catch (error: any) {
+      console.error('Request PIN error:', error);
+      setError(error.response?.data?.error || 'Error sending PIN. Please try again.');
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setMessage('');
+    
+    if (!email || !pin || !newPassword) {
+      setError('All fields are required');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    
+    try {
+      const response = await api.post('/api/reset-password/', { 
+        email,
+        pin,
+        new_password: newPassword
+      });
+      
+      if (response.status === 200) {
+        setMessage(response.data.message || 'Password reset successful.');
+        // Redirect to login after 2 seconds
+        setTimeout(() => {
+          navigate('/login');
+        }, 2000);
+      }
+    } catch (error: any) {
+      console.error('Reset password error:', error);
+      setError(error.response?.data?.error || 'Error resetting password. Please try again.');
+    }
   };
 
   return (
@@ -50,106 +98,114 @@ export const ResetPassword = () => {
               className="mx-auto w-21 h-21 mb-8"
             />
           </Link>
-          <h2 className={`mt-8 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>Reset your Password</h2>
+          <h2 className={`mt-8 text-2xl font-medium ${isDarkMode ? 'text-white' : 'text-gray-800'}`}>
+            {stage === 'requestPin' ? 'Reset your Password' : 'Enter Reset PIN'}
+          </h2>
           <p className={`mt-4 text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            Enter your Email address and we will send you instructions to reset your password.
+            {stage === 'requestPin' 
+              ? 'Enter your Email address and we will send you a PIN to reset your password.'
+              : 'Enter the PIN sent to your email and your new password.'}
           </p>
         </div>
+        
         {message && (
-          <div className="mb-4 p-2 bg-green-600 text-white rounded">
+          <div className="mb-4 p-2 bg-green-600 text-white rounded text-center">
             {message}
           </div>
         )}
-        <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-          <div>
-            <Input
-              type="email"
-              placeholder="Email@gmail.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
-            />
+        
+        {error && (
+          <div className="mb-4 p-2 bg-red-600 text-white rounded text-center">
+            {error}
           </div>
+        )}
+        
+        {stage === 'requestPin' ? (
+          <form onSubmit={handleRequestPin} className="mt-8 space-y-6">
+            <div>
+              <Input
+                type="email"
+                placeholder="Email@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+              />
+            </div>
 
-          <Button
-            type="submit"
-            className="auth-button"
-          >
-            Reset password
-          </Button>
+            <Button
+              type="submit"
+              className="auth-button"
+            >
+              Request PIN
+            </Button>
 
-          <div className="text-center">
-            <Link to="/" className="text-[#097F4D] text-sm hover:text-[#076b41]">
-              Back to Home page
-            </Link>
-          </div>
-        </form>
+            <div className="text-center">
+              <Link to="/login" className="text-[#097F4D] text-sm hover:text-[#076b41]">
+                Back to Login
+              </Link>
+            </div>
+          </form>
+        ) : (
+          <form onSubmit={handleResetPassword} className="mt-8 space-y-6">
+            <div className="space-y-4">
+              <Input
+                type="email"
+                placeholder="Email@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+              />
+              
+              <Input
+                type="text"
+                placeholder="Enter PIN"
+                value={pin}
+                onChange={(e) => setPin(e.target.value)}
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+              />
+              
+              <Input
+                type="password"
+                placeholder="New Password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+              />
+              
+              <Input
+                type="password"
+                placeholder="Confirm New Password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="auth-button"
+            >
+              Reset Password
+            </Button>
+
+            <div className="text-center space-y-2">
+              <button 
+                type="button" 
+                onClick={() => setStage('requestPin')}
+                className="text-[#097F4D] text-sm hover:text-[#076b41] block w-full"
+              >
+                Request new PIN
+              </button>
+              
+              <Link to="/login" className="text-[#097F4D] text-sm hover:text-[#076b41] block">
+                Back to Login
+              </Link>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );
 };
+
 export default ResetPassword;
-/*
-import React, { useState, FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import api from "../api";
-
-interface FormData {
-  email: string;
-}
-
-const ResetPassword: React.FC = () => {
-  const [formData, setFormData] = useState<FormData>({
-    email: ''
-  });
-  const [message, setMessage] = useState<string>('');
-
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    try {
-      const response = await api.post('/api/reset-password/', formData);
-      if (response.status === 200) {
-        setMessage('Password reset instructions sent to your email.');
-      }
-    } catch (error) {
-      console.error('Reset password error:', error);
-      setMessage('Error sending reset instructions. Please try again.');
-    }
-  };
-
-  return (
-    <div className="max-w-md mx-auto mt-10 p-6 bg-gray-800 rounded-lg">
-      <h2 className="text-2xl font-bold mb-6 text-white">Reset Password</h2>
-      {message && (
-        <div className="mb-4 p-2 bg-green-600 text-white rounded">
-          {message}
-        </div>
-      )}
-      <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full p-2 rounded bg-gray-700 text-white"
-            value={formData.email}
-            onChange={(e) => setFormData({...formData, email: e.target.value})}
-          />
-        </div>
-        <button
-          type="submit"
-          className="w-full bg-green-600 text-white p-2 rounded hover:bg-green-700"
-        >
-          Send Reset Instructions
-        </button>
-      </form>
-      <div className="mt-4 text-center text-gray-400">
-        Remember your password?{' '}
-        <Link to="/login" className="text-green-500 hover:text-green-400">
-          Sign In
-        </Link>
-      </div>
-    </div>
-  );
-};
-
-export default ResetPassword; */
