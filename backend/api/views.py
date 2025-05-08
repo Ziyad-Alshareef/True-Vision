@@ -1098,21 +1098,37 @@ class ForgotPasswordView(APIView):
     permission_classes = [AllowAny]
     def post(self, request):
         email = request.data.get('email')
+        logger = logging.getLogger(__name__)
+        logger.info(f"Forgot password request received for email: {email}")
+        
         try:
             user = User.objects.get(email=email)
+            logger.info(f"User found with email: {email}")
             
-            user.generate_reset_pin()
+            # Generate PIN
+            pin = user.generate_reset_pin()
+            logger.info(f"Generated reset PIN for user: {email}")
+            
+            # Get the correct from email from settings
+            from django.conf import settings
+            from_email = settings.DEFAULT_FROM_EMAIL
             
             # Send email with the PIN
-            send_mail(
-                'Password Reset PIN',
-                f'Your PIN is {user.reset_password_pin}. It is valid for 10 minutes.',
-                'no-reply@example.com',
-                [user.email],
-                fail_silently=False,
-            )
-            return Response({"message": "PIN sent to your email"}, status=status.HTTP_200_OK)
+            try:
+                send_mail(
+                    'Password Reset PIN',
+                    f'Your PIN is {user.reset_password_pin}. It is valid for 10 minutes.',
+                    from_email,
+                    [user.email],
+                    fail_silently=False,
+                )
+                logger.info(f"Password reset PIN email sent to: {email} from {from_email}")
+                return Response({"message": "PIN sent to your email"}, status=status.HTTP_200_OK)
+            except Exception as e:
+                logger.error(f"Failed to send email to {email}: {str(e)}")
+                return Response({"error": f"Failed to send email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         except User.DoesNotExist:
+            logger.warning(f"User with email {email} not found")
             return Response({"error": "Email not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class ResetPasswordView(APIView):
@@ -1134,4 +1150,55 @@ class ResetPasswordView(APIView):
                 return Response({"error": "Invalid or expired PIN"}, status=status.HTTP_400_BAD_REQUEST)
         except User.DoesNotExist:
             return Response({"error": "Email not found"}, status=status.HTTP_404_NOT_FOUND)
+
+class TestEmailView(APIView):
+    """
+    Endpoint to test email sending functionality
+    """
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        logger = logging.getLogger(__name__)
+        email = request.data.get('email')
+        
+        if not email:
+            return Response({"error": "Email address is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        logger.info(f"Test email request received for: {email}")
+        
+        try:
+            # Get email settings from Django settings
+            from django.conf import settings
+            from_email = settings.DEFAULT_FROM_EMAIL
+            email_host = settings.EMAIL_HOST
+            email_port = settings.EMAIL_PORT
+            email_use_tls = settings.EMAIL_USE_TLS
+            
+            # Log email settings (excluding password)
+            logger.info(f"Email settings: HOST={email_host}, PORT={email_port}, TLS={email_use_tls}, FROM={from_email}")
+            
+            # Send test email
+            send_mail(
+                'Test Email from True Vision',
+                'This is a test email to verify email sending functionality is working correctly.',
+                from_email,
+                [email],
+                fail_silently=False,
+            )
+            
+            logger.info(f"Test email sent successfully to: {email}")
+            
+            return Response({
+                "message": "Test email sent successfully",
+                "settings": {
+                    "host": email_host,
+                    "port": email_port,
+                    "use_tls": email_use_tls,
+                    "from_email": from_email
+                }
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            logger.error(f"Failed to send test email: {str(e)}")
+            return Response({"error": f"Failed to send test email: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
