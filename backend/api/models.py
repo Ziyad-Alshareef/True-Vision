@@ -121,6 +121,7 @@ class S3FrameStorage(S3Boto3Storage):
 
 class CustomUser(AbstractUser):
     """Custom user model extending Django's AbstractUser"""
+    email = models.EmailField(unique=True, verbose_name="email address")  # Make email unique
     reset_password_pin = models.CharField(max_length=6, blank=True, null=True)
     reset_password_pin_expiration = models.DateTimeField(blank=True, null=True)
     

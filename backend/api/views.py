@@ -22,6 +22,7 @@ import mimetypes
 from .detector import detect_deepfake
 import logging
 from django.core.mail import send_mail
+from django.utils import timezone
 
 # Get the user model (now points to CustomUser)
 User = get_user_model()
@@ -1138,17 +1139,60 @@ class ResetPasswordView(APIView):
         pin = request.data.get('pin')
         new_password = request.data.get('new_password')
         
+        logger = logging.getLogger(__name__)
+        logger.info(f"Password reset request received for email: {email}")
+        
+        if not email or not pin or not new_password:
+            logger.warning("Missing required parameters for password reset")
+            return Response({"error": "Email, PIN, and new password are all required"}, 
+                          status=status.HTTP_400_BAD_REQUEST)
+        
         try:
             user = User.objects.get(email=email)
+            logger.info(f"User found for reset password: {email}")
             
+            # Check if the PIN is valid
             if user.is_reset_pin_valid(pin):
-                user.set_password(new_password)
-                user.clear_reset_pin()  # Clear the PIN after successful reset
-                user.save()
-                return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)
+                logger.info(f"Valid PIN for user: {email}")
+                
+                # Set the new password
+                try:
+                    user.set_password(new_password)
+                    logger.info(f"Password changed for user: {email}")
+                    
+                    # Clear the PIN
+                    user.clear_reset_pin()
+                    logger.info(f"Reset PIN cleared for user: {email}")
+                    
+                    # Save the user
+                    user.save()
+                    logger.info(f"User saved successfully: {email}")
+                    
+                    return Response({"message": "Password reset successful"}, status=status.HTTP_200_OK)
+                except Exception as e:
+                    logger.error(f"Error setting password for {email}: {str(e)}")
+                    return Response({"error": f"Failed to set new password: {str(e)}"}, 
+                                  status=status.HTTP_500_INTERNAL_SERVER_ERROR)
             else:
-                return Response({"error": "Invalid or expired PIN"}, status=status.HTTP_400_BAD_REQUEST)
+                # Log why the PIN is invalid (expired or incorrect)
+                if user.reset_password_pin is None:
+                    logger.warning(f"No PIN set for user: {email}")
+                    reason = "No PIN has been set for this user"
+                elif user.reset_password_pin != pin:
+                    logger.warning(f"Incorrect PIN provided for user: {email}")
+                    reason = "Incorrect PIN"
+                elif user.reset_password_pin_expiration and timezone.now() > user.reset_password_pin_expiration:
+                    logger.warning(f"Expired PIN for user: {email}")
+                    reason = "PIN has expired"
+                else:
+                    logger.warning(f"Unknown PIN validation issue for user: {email}")
+                    reason = "Invalid PIN"
+                
+                return Response({"error": f"Invalid or expired PIN. {reason}"}, 
+                              status=status.HTTP_400_BAD_REQUEST)
+                
         except User.DoesNotExist:
+            logger.warning(f"User with email {email} not found")
             return Response({"error": "Email not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class TestEmailView(APIView):
@@ -1177,16 +1221,26 @@ class TestEmailView(APIView):
             # Log email settings (excluding password)
             logger.info(f"Email settings: HOST={email_host}, PORT={email_port}, TLS={email_use_tls}, FROM={from_email}")
             
+            # Find user by email
+            try:
+                user = User.objects.get(email=email)
+                recipient_email = user.email
+                logger.info(f"User found with email: {email}")
+            except User.DoesNotExist:
+                # If user doesn't exist, just use the provided email
+                recipient_email = email
+                logger.info(f"No user found with email: {email}, using provided email for test")
+                
             # Send test email
             send_mail(
                 'Test Email from True Vision',
                 'This is a test email to verify email sending functionality is working correctly.',
-                from_email,
-                [email],
+                from_email,  # Use the correct from_email from settings
+                [recipient_email],
                 fail_silently=False,
             )
             
-            logger.info(f"Test email sent successfully to: {email}")
+            logger.info(f"Test email sent successfully to: {recipient_email}")
             
             return Response({
                 "message": "Test email sent successfully",
