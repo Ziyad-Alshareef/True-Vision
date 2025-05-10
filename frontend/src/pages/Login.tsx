@@ -10,6 +10,7 @@ import whiteLogo from "./assets/whitefont-transpa.png";
 import darkLogo from "./assets/output-onlinepngtoolsblack font transpa.png";
 import { GreenCircle } from '../components/GreenCircle';
 import './Auth.css';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface FormData {
   username: string;
@@ -33,6 +34,7 @@ export const Login = () => {
     username: '',
     password: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -136,15 +138,22 @@ export const Login = () => {
                 <p className="text-red-500 text-sm mt-1">{getErrorForField('username')}</p>
               )}
             </div>
-            <div>
+            <div className="relative">
               <Input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="Password"
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
                 maxLength={50}
               />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
               {getErrorForField('password') && (
                 <p className="text-red-500 text-sm mt-1">{getErrorForField('password')}</p>
               )}

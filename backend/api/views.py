@@ -35,11 +35,34 @@ class CreateUserView(generics.CreateAPIView):
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
-            self.perform_create(serializer)
-            return Response(
-                {"message": "User created successfully"},
-                status=status.HTTP_201_CREATED
-            )
+            try:
+                self.perform_create(serializer)
+                return Response(
+                    {"message": "User created successfully"},
+                    status=status.HTTP_201_CREATED
+                )
+            except Exception as e:
+                # Log the error
+                logger = logging.getLogger(__name__)
+                logger.error(f"Error creating user: {str(e)}")
+                
+                # Check for duplicate email error
+                if 'email' in str(e) and 'already exists' in str(e):
+                    return Response(
+                        {"email": ["This email is already registered"]},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # Check for duplicate username error
+                elif 'username' in str(e) and 'already exists' in str(e):
+                    return Response(
+                        {"username": ["This username is already taken"]},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # Generic error
+                return Response(
+                    {"error": "Registration failed. Please try again."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class AnalysisViewSet(viewsets.ModelViewSet):

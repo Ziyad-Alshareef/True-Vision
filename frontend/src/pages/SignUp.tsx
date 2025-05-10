@@ -8,12 +8,15 @@ import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import api from "../api";
+import axios from 'axios';
 import './Auth.css';
+import { Eye, EyeOff } from 'lucide-react';
 
 interface FormData {
   username: string;
   email: string;
   password: string;
+  confirmPassword: string;
 }
 
 interface ValidationError {
@@ -25,8 +28,11 @@ export const SignUp = () => {
   const [formData, setFormData] = useState<FormData>({
     username: '',
     email: '',
-    password: ''
+    password: '',
+    confirmPassword: ''
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState<ValidationError[]>([]);
   const [successMessage, setSuccessMessage] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
@@ -63,6 +69,11 @@ export const SignUp = () => {
       newErrors.push({ field: 'password', message: 'Password must contain at least one letter' });
     }
 
+    // Confirm password validation
+    if (formData.password !== formData.confirmPassword) {
+      newErrors.push({ field: 'confirmPassword', message: 'Passwords do not match' });
+    }
+
     setErrors(newErrors);
     return newErrors.length === 0;
   };
@@ -78,16 +89,60 @@ export const SignUp = () => {
         email: formData.email.toLowerCase(),
         username: formData.username.toLowerCase()
       };
-      const response = await api.post('/api/signup/', dataToSend);
+      
+      // Create a new axios instance without auth headers for signup
+      const signupApi = axios.create({
+        baseURL: api.defaults.baseURL,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const response = await signupApi.post('/api/signup/', dataToSend);
+      
       if (response.status === 201) {
         setSuccessMessage('Registration successful! Redirecting to login...');
         setTimeout(() => {
           navigate('/login');
         }, 2000);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Signup error:', error);
-      setErrors([{ field: 'general', message: 'Registration failed. Please try again.' }]);
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        console.log('Error data:', errorData); // For debugging
+        
+        // Handle array format validation errors
+        if (Array.isArray(errorData.username)) {
+          setErrors([{ field: 'username', message: errorData.username[0] }]);
+        } 
+        // Handle string format validation errors 
+        else if (typeof errorData.username === 'string') {
+          setErrors([{ field: 'username', message: errorData.username }]);
+        }
+        // Handle array format email errors
+        else if (Array.isArray(errorData.email)) {
+          setErrors([{ field: 'email', message: errorData.email[0] }]);
+        } 
+        // Handle string format email errors
+        else if (typeof errorData.email === 'string') {
+          setErrors([{ field: 'email', message: errorData.email }]);
+        }
+        // Handle generic detail error
+        else if (errorData.detail) {
+          setErrors([{ field: 'general', message: errorData.detail }]);
+        }
+        // Handle generic error message
+        else if (errorData.error) {
+          setErrors([{ field: 'general', message: errorData.error }]);
+        }
+        // Fallback to general error
+        else {
+          setErrors([{ field: 'general', message: 'Registration failed. Please try again.' }]);
+        }
+      } else {
+        setErrors([{ field: 'general', message: 'Registration failed. Please try again.' }]);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -163,16 +218,49 @@ export const SignUp = () => {
               )}
             </div>
             <div>
-              <Input
-                type="password"
-                placeholder="Password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
-                maxLength={50}
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
+                  maxLength={50}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 z-20"
+                  style={{ marginTop: '-1px' }}
+                >
+                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
               {getErrorForField('password') && (
                 <p className="text-red-500 text-sm mt-1">{getErrorForField('password')}</p>
+              )}
+            </div>
+            <div>
+              <div className="relative">
+                <Input
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Confirm Password"
+                  value={formData.confirmPassword}
+                  onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                  className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
+                  maxLength={50}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 z-20"
+                  style={{ marginTop: '-1px' }}
+                >
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+              {getErrorForField('confirmPassword') && (
+                <p className="text-red-500 text-sm mt-1">{getErrorForField('confirmPassword')}</p>
               )}
             </div>
           </div>
