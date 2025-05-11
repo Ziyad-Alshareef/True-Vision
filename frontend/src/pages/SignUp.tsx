@@ -11,6 +11,7 @@ import api from "../api";
 import axios from 'axios';
 import './Auth.css';
 import { Eye, EyeOff } from 'lucide-react';
+const PASSWORD_FIELD_OPACITY = 0.9;
 
 interface FormData {
   username: string;
@@ -224,8 +225,9 @@ export const SignUp = () => {
                   placeholder="Password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
+                  className={`${isDarkMode ? 'bg-[#3c4336] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10 `}
                   maxLength={50}
+                  style={{ opacity: PASSWORD_FIELD_OPACITY }}
                 />
                 <button
                   type="button"
@@ -247,8 +249,9 @@ export const SignUp = () => {
                   placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
+                  className={`${isDarkMode ? 'bg-[#3c4336] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
                   maxLength={50}
+                  style={{ opacity: PASSWORD_FIELD_OPACITY }}
                 />
                 <button
                   type="button"
