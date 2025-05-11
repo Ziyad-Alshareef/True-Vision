@@ -5,7 +5,11 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://true-vision-cb396a
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true, // Important for handling cookies
+  withCredentials: false, // Disable for better cross-browser compatibility
+  headers: {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json'
+  }
 });
 
 // Add a request interceptor to add authorization headers

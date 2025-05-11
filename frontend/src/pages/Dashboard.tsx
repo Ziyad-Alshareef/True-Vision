@@ -37,6 +37,7 @@ interface LocationState {
   signedThumbnailUrl?: string;
   lastUploadedVideoId?: string;
   videoDuration?: number;
+  autoStartDetection?: boolean;
 }
 
 // Define the analysis interface
@@ -116,20 +117,20 @@ const getSignedUrl = async (s3Key: string): Promise<string | null> => {
     console.log(`Getting signed URL for clean key: ${cleanKey}`);
 
     // First try the /s3/signed-url/ endpoint (which should be in the updated API)
-    try {
+   /* try {
       const response = await api.get(`/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
       if (response.status === 200 && response.data && response.data.signed_url) {
         console.log(`Got signed URL for ${cleanKey}:`, response.data.signed_url);
         return response.data.signed_url;
       }
     } catch (newEndpointError) {
-      console.log('New endpoint not available, trying legacy endpoint');
+      console.log('New endpoint not available, trying legacy endpoint');*/
       // Fall back to legacy endpoint
       const legacyResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
       if (legacyResponse.status === 200 && legacyResponse.data && legacyResponse.data.signed_url) {
         console.log(`Got signed URL from legacy endpoint for ${cleanKey}:`, legacyResponse.data.signed_url);
         return legacyResponse.data.signed_url;
-      }
+      
     }
 
     return null;
@@ -168,7 +169,7 @@ const checkEndpointAvailability = (() => {
 const checkS3ObjectExists = async (key: string): Promise<{ exists: boolean, alternateKey?: string, signedUrl?: string }> => {
   try {
     // First check if the endpoint is available
-    const isEndpointAvailable = await checkEndpointAvailability('/s3/object-exists/');
+    const isEndpointAvailable = false;//await checkEndpointAvailability('/s3/object-exists/');
 
     if (!isEndpointAvailable) {
       console.log('S3 object-exists endpoint not available, using direct signed URL');
@@ -425,7 +426,7 @@ export const Dashboard = (): JSX.Element => {
 
         console.log('Final formatted analyses:', formattedAnalyses);
         setAnalyses(formattedAnalyses);
-
+/*
         // Select the first result if available
         if (formattedAnalyses.length > 0) {
           const firstAnalysis = formattedAnalyses[0];
@@ -448,7 +449,7 @@ export const Dashboard = (): JSX.Element => {
             }
           }
         }
-      }
+*/      }
     } catch (error) {
       console.error("Error fetching analyses:", error);
       setError("Failed to load your analyses. Please try again later.");
@@ -468,9 +469,8 @@ export const Dashboard = (): JSX.Element => {
 
   // Update handleResultClick to lazy-load thumbnails on demand
   const handleResultClick = async (id: string) => {
-    if (selectedResult === id) {
-      return;
-    }
+    // Always allow selection, even if it's the same item
+    // This ensures users can re-select items that were auto-selected
 
     setIsImageLoading(true); // Show loading spinner immediately
     setSelectedResult(id);
@@ -489,7 +489,7 @@ export const Dashboard = (): JSX.Element => {
           setIsImageLoading(false);
           return;
         }
-        
+        /*
         // Otherwise get a fresh signed URL
         const s3Key = getS3KeyFromUrl(analysis.thumbnail_url);
         if (s3Key) {
@@ -500,7 +500,7 @@ export const Dashboard = (): JSX.Element => {
             setIsImageLoading(false);
             return;
           }
-        }
+        }*/
       }
       
       // Try to get a thumbnail by video ID if available
@@ -644,6 +644,16 @@ export const Dashboard = (): JSX.Element => {
 
   useEffect(() => {
     const state = location.state as LocationState;
+    
+    // Check if we should auto-start detection (coming from login)
+    if (state?.autoStartDetection) {
+      console.log('Auto-starting detection after login');
+      // A slight delay to ensure the dashboard is fully loaded
+      setTimeout(() => {
+        setShowDetection(true);
+      }, 300);
+    }
+    
     if (state?.signedThumbnailUrl || state?.lastUploadedVideoId || state?.videoDuration) {
       console.log('Location state detected (dashboard):', state);
       

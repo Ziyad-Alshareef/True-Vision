@@ -21,21 +21,28 @@ export const ResetPassword = () => {
   const [error, setError] = useState<string>('');
   const { isDarkMode, isTransitioning } = useTheme();
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleRequestPin = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling for Safari
     setError('');
     setMessage('');
+    setIsLoading(true);
     
     if (!email) {
       setError('Email is required');
+      setIsLoading(false);
       return;
     }
     
     try {
+      console.log('Sending PIN request for email:', email);
       const response = await api.post('/api/forgot-password/', { email });
+      console.log('PIN request response:', response);
+      
       if (response.status === 200) {
         setMessage(response.data.message || 'PIN sent to your email.');
         setStage('resetPassword');
@@ -43,30 +50,44 @@ export const ResetPassword = () => {
     } catch (error: any) {
       console.error('Request PIN error:', error);
       setError(error.response?.data?.error || 'Error sending PIN. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event bubbling for Safari
     setError('');
     setMessage('');
+    setIsLoading(true);
     
     if (!email || !pin || !newPassword) {
       setError('All fields are required');
+      setIsLoading(false);
       return;
     }
     
     if (newPassword !== confirmPassword) {
       setError('Passwords do not match');
+      setIsLoading(false);
       return;
     }
     
     try {
+      console.log('Sending password reset request with data:', { 
+        email, 
+        pin, 
+        new_password_length: newPassword.length 
+      });
+      
       const response = await api.post('/api/reset-password/', { 
         email,
         pin,
         new_password: newPassword
       });
+      
+      console.log('Password reset response:', response);
       
       if (response.status === 200) {
         setMessage(response.data.message || 'Password reset successful.');
@@ -78,6 +99,8 @@ export const ResetPassword = () => {
     } catch (error: any) {
       console.error('Reset password error:', error);
       setError(error.response?.data?.error || 'Error resetting password. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -137,9 +160,17 @@ export const ResetPassword = () => {
 
             <Button
               type="submit"
+              disabled={isLoading}
               className="auth-button"
             >
-              Request PIN
+              {isLoading ? (
+                <div className="flex items-center justify-center">
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Requesting PIN...
+                </div>
+              ) : (
+                'Request PIN'
+              )}
             </Button>
 
             <div className="text-center">
@@ -207,8 +238,16 @@ export const ResetPassword = () => {
             <Button
               type="submit"
               className="auth-button"
+              disabled={isLoading}
             >
-              Reset Password
+              {isLoading ? (
+              <div className="flex items-center justify-center">
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                Resetting Password...
+              </div>
+            ) : (
+              'Reset Password'
+            )}
             </Button>
 
             <div className="text-center space-y-2">

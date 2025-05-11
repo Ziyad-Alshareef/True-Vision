@@ -1231,7 +1231,7 @@ class ResetPasswordView(APIView):
                     logger.warning(f"Unknown PIN validation issue for user: {email}")
                     reason = "Invalid PIN"
                 
-                return Response({"error": f"Invalid or expired PIN. {reason}"}, 
+                return Response({"error": f"{reason}"}, 
                               status=status.HTTP_400_BAD_REQUEST)
                 
         except User.DoesNotExist:

@@ -79,7 +79,8 @@ export const Login = () => {
         localStorage.setItem('refresh', data.refresh);
         localStorage.setItem('username', formData.username.toLowerCase());
         login();
-        navigate('/dashboard');
+        // Navigate to dashboard with a state flag to auto-start detection
+        navigate('/dashboard', { state: { autoStartDetection: true } });
       }
     } catch (error) {
       console.error('Login error:', error);
