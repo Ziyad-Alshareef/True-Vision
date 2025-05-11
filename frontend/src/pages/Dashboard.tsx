@@ -457,10 +457,15 @@ export const Dashboard = (): JSX.Element => {
       setIsLoading(false);
     }
   };
-  // Fetch analyses effect
+  // Fetch analyses effect - only on initial mount
   useEffect(() => {
+    // Only fetch analyses on initial component mount
+    // Don't refetch when returning from Detection page with locationState
+    // as we'll handle adding the new analysis directly in the location state effect
     fetchAnalyses();
-  }, [navigate, locationState]);
+    setShowDetection(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);  // Empty dependency array means this only runs once on mount
 
   // Memoize the selected analysis
   const selectedAnalysis = useMemo(() => {
@@ -642,6 +647,41 @@ export const Dashboard = (): JSX.Element => {
     handleNewAnalysis();
   }, [analyses, showDetection]); // Depend on analyses and showDetection
 
+  // Helper function to create a new analysis from location state data
+  const createAnalysisFromState = (state: LocationState): Analysis | null => {
+    if (!state.lastUploadedVideoId) return null;
+    
+    // Format duration if available
+    let duration = "00:00";
+    if (state.videoDuration) {
+      const seconds = parseInt(state.videoDuration.toString());
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      duration = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    }
+
+    // Generate a temporary ID - this will be replaced when we get the actual data
+    // Use current timestamp to ensure uniqueness
+    const tempId = `temp-${Date.now()}`;
+
+    // Parse the video ID as a number for the result object
+    const videoId = parseInt(state.lastUploadedVideoId);
+
+    return {
+      id: 'Loading...',
+      confidence: "Processing...",
+      duration,
+      created_at: new Date().toISOString(),
+      result: {
+        is_fake: false, // Default values until analysis completes
+        confidence: 1,
+        video_id: videoId
+      },
+      thumbnail_url: state.signedThumbnailUrl,
+      video_url: ""
+    };
+  };
+
   useEffect(() => {
     const state = location.state as LocationState;
     
@@ -656,11 +696,6 @@ export const Dashboard = (): JSX.Element => {
     
     if (state?.signedThumbnailUrl || state?.lastUploadedVideoId || state?.videoDuration) {
       console.log('Location state detected (dashboard):', state);
-      
-      // Clear previous state to prevent flashing old information
-      setSelectedResult(null);
-      setSelectedImage(null);
-      setIsImageLoading(true);
       
       if (state.signedThumbnailUrl) {
         console.log('Using signedThumbnailUrl from state:', state.signedThumbnailUrl);
@@ -680,8 +715,37 @@ export const Dashboard = (): JSX.Element => {
         localStorage.setItem('dashboard_video_duration', state.videoDuration.toString());
       }
       
-      // Immediately trigger a fetch to get the latest data
-      fetchAnalyses();
+      // Instead of refetching, add the new analysis directly to the list
+      const newAnalysis = createAnalysisFromState(state);
+      if (newAnalysis) {
+        console.log('Adding new analysis to list without refetching:', newAnalysis);
+        
+        // Add the new analysis to the beginning of the list
+        setAnalyses(prevAnalyses => {
+          // Check if we already have this analysis (by video ID)
+          const videoId = parseInt(state.lastUploadedVideoId!);
+          const existingIndex = prevAnalyses.findIndex(a => a.result?.video_id === videoId);
+          
+          if (existingIndex !== -1) {
+            // Replace the existing analysis
+            const updatedAnalyses = [...prevAnalyses];
+            updatedAnalyses[existingIndex] = newAnalysis;
+            return updatedAnalyses;
+          } else {
+            // Add as a new analysis at the beginning (most recent)
+            return [newAnalysis, ...prevAnalyses];
+          }
+        });
+        
+        // Set this as the selected result
+        setSelectedResult(newAnalysis.id);
+        setIsImageLoading(true);
+      } else {
+        // If we couldn't create a new analysis object, clear selection
+        setSelectedResult(null);
+        setSelectedImage(null);
+        setIsImageLoading(true);
+      }
     }
   }, [location]);
 
@@ -1002,8 +1066,7 @@ export const Dashboard = (): JSX.Element => {
                                      selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e', 
                               textAlign: 'center' 
                             }}>
-                              {selectedAnalysis.result?.confidence === 0 ? 'No face detected' : 
-                               selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
+                              {selectedAnalysis.result?.confidence === 0 ? 'No face detected' : selectedAnalysis.result?.confidence === 1 ? 'Processing...' : selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
                             </td>
                             <td className="confidence text-center" style={{ 
                               color: selectedAnalysis.result?.confidence === 0 ? '#eab308' : 
