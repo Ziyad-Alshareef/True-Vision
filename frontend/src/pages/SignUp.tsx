@@ -225,7 +225,7 @@ export const SignUp = () => {
                   placeholder="Password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`${isDarkMode ? 'bg-[#3c4336] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10 `}
+                  className={`${isDarkMode ? 'bg-[#3c4336] border-none text-white' : 'bg-[#e2e7da] border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10 `}
                   maxLength={50}
                   style={{ opacity: PASSWORD_FIELD_OPACITY }}
                 />
@@ -249,7 +249,7 @@ export const SignUp = () => {
                   placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className={`${isDarkMode ? 'bg-[#3c4336] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
+                  className={`${isDarkMode ? 'bg-[#3c4336] border-none text-white' : 'bg-[#e2e7da] border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`}
                   maxLength={50}
                   style={{ opacity: PASSWORD_FIELD_OPACITY }}
                 />
