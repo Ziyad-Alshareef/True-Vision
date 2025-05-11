@@ -620,8 +620,8 @@ export const Dashboard = (): JSX.Element => {
             const objectCheck = await checkS3ObjectExists(s3Key);
             if (objectCheck.exists || objectCheck.alternateKey) {
               if (objectCheck.signedUrl) {
-                const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(objectCheck.signedUrl)}`);
-                setSelectedImage(proxyUrl);
+                //const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(objectCheck.signedUrl)}`);
+                //setSelectedImage(proxyUrl);
                 return;
               }
             }
