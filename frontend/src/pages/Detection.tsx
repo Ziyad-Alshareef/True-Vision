@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '../components/ui/button';
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
@@ -14,12 +14,33 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
+  const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const analysisTimerRef = useRef<NodeJS.Timeout | null>(null);
   const navigate = useNavigate();
 
+  // Function to check video duration
+  const checkVideoDuration = (file: File) => {
+    return new Promise<number>((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.onloadedmetadata = () => {
+        window.URL.revokeObjectURL(video.src);
+        resolve(video.duration);
+      };
+      video.onerror = () => {
+        reject('Error loading video metadata');
+      };
+      video.src = URL.createObjectURL(file);
+    });
+  };
+
   // Handle file selection
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (file) {
       // Check if file is a video
@@ -28,19 +49,33 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
         return;
       }
 
-      // Check file size (limit to 100MB for example)
-      if (file.size > 100 * 1024 * 1024) {
-        setError('File is too large. Maximum size is 100MB');
+      // Check file size (limit to 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError('File is too large. Maximum size is 5MB');
         return;
       }
 
-      setSelectedFile(file);
-      setError(null);
+      try {
+        // Check video duration
+        const duration = await checkVideoDuration(file);
+        setVideoDuration(duration);
+        
+        if (duration > 30) {
+          setError('Video is too long. Maximum duration is 30 seconds');
+          return;
+        }
+
+        setSelectedFile(file);
+        setError(null);
+      } catch (err) {
+        console.error('Error checking video:', err);
+        setError('Error checking video. Please try another file.');
+      }
     }
   };
 
   // Handle drag and drop
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -51,13 +86,27 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
         return;
       }
 
-      if (file.size > 100 * 1024 * 1024) {
-        setError('File is too large. Maximum size is 100MB');
+      if (file.size > 5 * 1024 * 1024) {
+        setError('File is too large. Maximum size is 5MB');
         return;
       }
 
-      setSelectedFile(file);
-      setError(null);
+      try {
+        // Check video duration
+        const duration = await checkVideoDuration(file);
+        setVideoDuration(duration);
+        
+        if (duration > 30) {
+          setError('Video is too long. Maximum duration is 30 seconds');
+          return;
+        }
+
+        setSelectedFile(file);
+        setError(null);
+      } catch (err) {
+        console.error('Error checking video:', err);
+        setError('Error checking video. Please try another file.');
+      }
     }
   };
 
@@ -75,6 +124,7 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
 
     try {
       setIsUploading(true);
+      setIsAnalyzing(false);
       setUploadProgress(0);
       setError(null);
 
@@ -82,6 +132,11 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
       formData.append('video', selectedFile);
       // Ensure deepfake detection is enabled
       formData.append('detect_deepfake', 'true');
+
+      // Add duration if available
+      if (videoDuration !== null) {
+        formData.append('duration', videoDuration.toString());
+      }
 
       // Make API request with upload progress
       const response = await api.post('/api/test/upload/', formData, {
@@ -93,6 +148,33 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
             (progressEvent.loaded * 100) / (progressEvent.total || 100)
           );
           setUploadProgress(percentCompleted);
+          
+          // When upload is complete, switch to analyzing state
+          if (percentCompleted === 100) {
+            setIsAnalyzing(true);
+            setAnalysisProgress(0);
+            
+            // Simulate analysis progress
+            let progress = 0;
+            const estimatedAnalysisTime = 10000; // 8 seconds estimated time for analysis
+            const intervalTime = 200; // Update every 200ms
+            const steps = estimatedAnalysisTime / intervalTime;
+            const increment = 95 / steps; // Go up to 95% with timer, last 5% when complete
+            
+            // Clear any existing timer
+            if (analysisTimerRef.current) {
+              clearInterval(analysisTimerRef.current);
+            }
+            
+            // Start a new timer for analysis progress
+            analysisTimerRef.current = setInterval(() => {
+              progress += increment;
+              if (progress >= 95) {
+                clearInterval(analysisTimerRef.current!);
+              }
+              setAnalysisProgress(Math.min(Math.round(progress), 95));
+            }, intervalTime);
+          }
         },
       });
 
@@ -161,7 +243,8 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
             refresh: true,
             lastUploadedVideoId: response.data?.video_id,
             signedThumbnailUrl: localStorage.getItem('last_signed_thumbnail_url') ||
-              localStorage.getItem('last_api_signed_url')
+              localStorage.getItem('last_api_signed_url'),
+            videoDuration: videoDuration
           }
         });
 
@@ -173,7 +256,13 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
       setError('Failed to upload and analyze video. Please try again.');
     } finally {
       setIsUploading(false);
-    }
+      setIsAnalyzing(false);
+      // Clear any running analysis progress timer
+      if (analysisTimerRef.current) {
+        clearInterval(analysisTimerRef.current);
+        analysisTimerRef.current = null;
+      }
+    }  
   };
 
   // Handle click on upload area to trigger file input
@@ -213,7 +302,7 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
           ) : (
             <div>
               <p className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Drag and drop your video here, or click to upload</p>
-              <p className={`${isDarkMode ? 'text-gray-500' : 'text-gray-500'}  text-sm mt-2`}>Supported formats: MP4, MOV, AVI (Max: 100MB)</p>
+              <p className={`${isDarkMode ? 'text-gray-500' : 'text-gray-500'}  text-sm mt-2`}>Supported formats: MP4, MOV, AVI (Max: 5MB, 30 seconds)</p>
             </div>
           )}
 
@@ -233,26 +322,28 @@ export const Detection = ({ onAnalysisComplete }: DetectionProps): JSX.Element =
           </div>
         )}
 
-        {/* Upload progress */}
-        {isUploading && (
+        {/* Upload and Analysis progress */}
+        {(isUploading || isAnalyzing) && (
           <div className="mb-6">
             <div className={`h-2 ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'} rounded-full mb-2`}>
               <div
                 className="h-2 bg-[#097F4D] rounded-full"
-                style={{ width: `${uploadProgress}%` }}
+                style={{ width: isAnalyzing ? `${analysisProgress}%` : `${uploadProgress}%` }}
               />
             </div>
-            <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm`}>Uploading... {uploadProgress}%</p>
+            <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} text-sm`}>
+              {isAnalyzing ? `Analyzing video... ${analysisProgress}%` : `Uploading... ${uploadProgress}%`}
+            </p>
           </div>
         )}
 
         {/* Upload button */}
         <Button
           onClick={handleUpload}
-          disabled={!selectedFile || isUploading}
+          disabled={!selectedFile || isUploading || isAnalyzing}
           className="bg-[#097F4D] hover:bg-[#076b41] text-white px-8 py-2 mb-12 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isUploading ? 'Uploading...' : 'Analyze Video'}
+          {isAnalyzing ? 'Analyzing...' : isUploading ? 'Uploading...' : 'Analyze Video'}
         </Button>
 
         {/* Features */}

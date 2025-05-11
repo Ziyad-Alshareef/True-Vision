@@ -9,6 +9,7 @@ import { GreenCircle } from '../components/GreenCircle';
 import { useTheme } from '../context/ThemeContext';
 import { ThemeToggle } from '../components/ThemeToggle';
 import './Auth.css';
+import { Eye, EyeOff } from 'lucide-react';
 
 export const ResetPassword = () => {
   const [email, setEmail] = useState('');
@@ -19,6 +20,8 @@ export const ResetPassword = () => {
   const [message, setMessage] = useState<string>('');
   const [error, setError] = useState<string>('');
   const { isDarkMode, isTransitioning } = useTheme();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const navigate = useNavigate();
 
   const handleRequestPin = async (e: React.FormEvent) => {
@@ -148,6 +151,7 @@ export const ResetPassword = () => {
         ) : (
           <form onSubmit={handleResetPassword} className="mt-8 space-y-6">
             <div className="space-y-4">
+            <div className="relative">
               <Input
                 type="email"
                 placeholder="Email@gmail.com"
@@ -155,30 +159,49 @@ export const ResetPassword = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
               />
-              
+              </div>
+              <div className="relative">
               <Input
                 type="text"
                 placeholder="Enter PIN"
                 value={pin}
                 onChange={(e) => setPin(e.target.value)}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
-              />
-              
+              /></div>
+              <div className="relative">
               <Input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="New Password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
               />
-              
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 z-20"
+                style={{ marginTop: '-1px' }}
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button> 
+              </div>
+              <div className="relative">
               <Input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 placeholder="Confirm New Password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
               />
+              <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 z-20"
+                  style={{ marginTop: '-1px' }}
+                >
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
             </div>
 
             <Button

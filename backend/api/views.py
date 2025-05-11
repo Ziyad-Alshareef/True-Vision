@@ -196,6 +196,15 @@ class VideoUploadTestView(APIView):
             return Response({'error': 'No video file provided'}, 
                            status=status.HTTP_400_BAD_REQUEST)
         
+        # Check file size limit (5MB)
+        max_size = 5 * 1024 * 1024  # 5MB in bytes
+        if video_file.size > max_size:
+            logger.error(f"Video file too large: {video_file.size} bytes (max: {max_size} bytes)")
+            return Response(
+                {'error': f'File is too large. Maximum size is 5MB. Your file: {video_file.size/1024/1024:.2f}MB'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
         logger.info(f"Got video file: {video_file.name}, size: {video_file.size} bytes")
         
         try:
@@ -207,6 +216,16 @@ class VideoUploadTestView(APIView):
             logger.info("Extracting video metadata...")
             video_metadata = self.get_video_metadata(video_file)
             logger.info(f"Video metadata: {video_metadata}")
+            
+            # Check video duration limit (30 seconds)
+            max_duration = 30  # seconds
+            duration = video_metadata.get('duration', 0)
+            if duration > max_duration:
+                logger.error(f"Video duration too long: {duration} seconds (max: {max_duration} seconds)")
+                return Response(
+                    {'error': f'Video is too long. Maximum duration is {max_duration} seconds. Your video: {duration} seconds'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Create a proper Video object instead of just an Analysis
             logger.info("Creating Video object...")
@@ -275,7 +294,8 @@ class VideoUploadTestView(APIView):
                 "video_id": video.Video_id,
                 "is_fake": detection_info.get("is_fake", False),
                 "confidence": detection_info.get("confidence", 0.0),
-                "detection": detection_info
+                "detection": detection_info,
+                "duration": video_metadata.get('duration', 0)
             }
             
             logger.info(f"Creating analysis with result data: {result_data}")
@@ -1119,7 +1139,7 @@ class UserInfoView(APIView):
         })
 
 class ForgotPasswordView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
     def post(self, request):
         email = request.data.get('email')
         logger = logging.getLogger(__name__)
@@ -1156,7 +1176,7 @@ class ForgotPasswordView(APIView):
             return Response({"error": "Email not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class ResetPasswordView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
     def post(self, request):
         email = request.data.get('email')
         pin = request.data.get('pin')

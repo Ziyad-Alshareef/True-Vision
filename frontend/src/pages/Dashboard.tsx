@@ -36,6 +36,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL
 interface LocationState {
   signedThumbnailUrl?: string;
   lastUploadedVideoId?: string;
+  videoDuration?: number;
 }
 
 // Define the analysis interface
@@ -259,220 +260,204 @@ export const Dashboard = (): JSX.Element => {
       setUsername(storedUsername);
     }
   }, []);
+  const fetchAnalyses = async () => {
+    try {
+      const token = localStorage.getItem('access');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
 
-  // Fetch analyses effect
-  useEffect(() => {
-    const fetchAnalyses = async () => {
-      try {
-        const token = localStorage.getItem('access');
-        if (!token) {
-          navigate('/login');
-          return;
-        }
+      setIsLoading(true);
 
-        setIsLoading(true);
+      // Check if we have a signed thumbnail URL from the upload
+      const signedThumbnailUrl = locationState?.signedThumbnailUrl ||
+        localStorage.getItem('last_signed_thumbnail_url') ||
+        localStorage.getItem('last_api_signed_url');
 
-        // Check if we have a signed thumbnail URL from the upload
-        const signedThumbnailUrl = locationState?.signedThumbnailUrl ||
-          localStorage.getItem('last_signed_thumbnail_url') ||
-          localStorage.getItem('last_api_signed_url');
+      const lastUploadedId = locationState?.lastUploadedVideoId ||
+        localStorage.getItem('last_uploaded_video_id');
 
-        const lastUploadedId = locationState?.lastUploadedVideoId ||
-          localStorage.getItem('last_uploaded_video_id');
+      if (signedThumbnailUrl && lastUploadedId) {
+        console.log(`Found signed thumbnail URL for video ${lastUploadedId}:`, signedThumbnailUrl);
+      }
 
-        if (signedThumbnailUrl && lastUploadedId) {
-          console.log(`Found signed thumbnail URL for video ${lastUploadedId}:`, signedThumbnailUrl);
-        }
+      // Log API endpoints we're using
+      console.log('Fetching data from API endpoints:');
+      console.log('- Videos endpoint: /api/videos/');
+      console.log('- Analysis endpoint: /api/analysis/');
 
-        // Log API endpoints we're using
-        console.log('Fetching data from API endpoints:');
-        console.log('- Videos endpoint: /api/videos/');
-        console.log('- Analysis endpoint: /api/analysis/');
+      // First get all video details
+      const videosResponse = await api.get('/api/videos/');
+      console.log('Raw videos response:', videosResponse);
+      const videos = videosResponse.data;
+      console.log('Videos data:', videos);
 
-        // First get all video details
-        const videosResponse = await api.get('/api/videos/');
-        console.log('Raw videos response:', videosResponse);
-        const videos = videosResponse.data;
-        console.log('Videos data:', videos);
-
-        // Process videos to get signed URLs for all thumbnails
-        if (videos && videos.length > 0) {
-          for (const video of videos) {
-            // If this is the video that was just uploaded, use the signed URL we got from the upload process
-            if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
-              console.log(`Using provided signed URL for video ${video.Video_id}`);
-              video.thumbnail_url = signedThumbnailUrl;
-              continue;
-            }
-
-            // Otherwise, get a signed URL from the backend
-            if (video.thumbnail_url) {
-              const s3Key = getS3KeyFromUrl(video.thumbnail_url);
-              if (s3Key) {
-                const signedUrl = await getSignedUrl(s3Key);
-                if (signedUrl) {
-                  console.log(`Replacing thumbnail URL for video ${video.Video_id} with signed URL`);
-                  video.thumbnail_url = signedUrl;
-                }
-              }
-            }
+      // Only update the thumbnail URL for the last uploaded video
+      // Other thumbnails will be loaded on-demand when a result is selected
+      if (videos && videos.length > 0) {
+        for (const video of videos) {
+          // If this is the video that was just uploaded, use the signed URL we got from the upload process
+          if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
+            console.log(`Using provided signed URL for video ${video.Video_id}`);
+            video.thumbnail_url = signedThumbnailUrl;
           }
-
-          console.log('First video thumbnail URL (after signing):', videos[0].thumbnail_url);
         }
+      }
 
-        // Then get all analyses
-        const analysisResponse = await api.get('/api/analysis/');
-        console.log('Raw analysis response:', analysisResponse);
-        const analysisData = analysisResponse.data;
-        console.log('Analysis data sample:', analysisData.length > 0 ? analysisData[0] : 'No analyses found');
+      // Then get all analyses
+      const analysisResponse = await api.get('/api/analysis/');
+      console.log('Raw analysis response:', analysisResponse);
+      const analysisData = analysisResponse.data;
+      console.log('Analysis data sample:', analysisData.length > 0 ? analysisData[0] : 'No analyses found');
 
-        if (videosResponse.status === 200 && analysisResponse.status === 200) {
-          // Map videos by ID for easier lookup
-          const videoMap: Record<number, any> = {};
-          videos.forEach((video: any) => {
-            videoMap[video.Video_id] = video;
+      if (videosResponse.status === 200 && analysisResponse.status === 200) {
+        // Map videos by ID for easier lookup
+        const videoMap: Record<number, any> = {};
+        videos.forEach((video: any) => {
+          videoMap[video.Video_id] = video;
 
-            // If we have a direct URL for this video, replace the thumbnail URL
-            if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
-              console.log(`Overriding thumbnail URL for video ${video.Video_id} with direct S3 URL`);
-              video.thumbnail_url = signedThumbnailUrl;
-            }
-          });
-          console.log('Video map with potential overrides:', videoMap);
+          // If we have a direct URL for this video, replace the thumbnail URL
+          if (lastUploadedId && video.Video_id.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
+            console.log(`Overriding thumbnail URL for video ${video.Video_id} with direct S3 URL`);
+            video.thumbnail_url = signedThumbnailUrl;
+          }
+        });
+        console.log('Video map with potential overrides:', videoMap);
 
-          // Map analyses to their corresponding videos
-          const formattedAnalyses = await Promise.all(analysisData.map(async (item: any) => {
+        // Map analyses to their corresponding videos
+        const formattedAnalyses = await Promise.all(analysisData.map(async (item: any) => {
+          try {
+            console.log('Processing analysis item:', item);
+
+            // Parse result_data if it's a string
+            let resultData;
             try {
-              console.log('Processing analysis item:', item);
-
-              // Parse result_data if it's a string
-              let resultData;
-              try {
-                resultData = typeof item.result_data === 'string'
-                  ? JSON.parse(item.result_data)
-                  : item.result_data;
-              } catch (e) {
-                console.error('Error parsing result_data:', e);
-                resultData = { is_fake: false, confidence: 0 };
-              }
-              console.log('Parsed result data:', resultData);
-
-              // Find video ID either from the result_data or from the video URL if available
-              let videoId = null;
-              if (resultData && resultData.video_id) {
-                videoId = resultData.video_id;
-                console.log(`Found video_id ${videoId} in result_data`);
-              } else if (item.video) {
-                // Try to extract video ID from the video URL if present
-                const videoUrlMatch = item.video.match(/\/(\d+)\/$/);
-                if (videoUrlMatch && videoUrlMatch[1]) {
-                  videoId = parseInt(videoUrlMatch[1]);
-                  console.log(`Extracted video_id ${videoId} from video URL`);
-                }
-              }
-
-              // Get the video by ID
-              const video = videoId ? videoMap[videoId] : null;
-              console.log(`Video lookup for ID ${videoId}:`, video ? 'Found' : 'Not found');
-
-              // If video not found through ID mapping, try to find by comparing URLs
-              let fallbackVideo = null;
-              if (!video && item.video) {
-                fallbackVideo = videos.find((v: any) => v.video_url === item.video);
-                console.log('Fallback video search by URL:', fallbackVideo ? 'Found' : 'Not found');
-              }
-
-              const matchedVideo = video || fallbackVideo;
-              console.log('Final matched video:', matchedVideo);
-
-              // Direct S3 URL construction if we know the video ID but don't have a thumbnail
-              let thumbnailUrl = matchedVideo?.thumbnail_url || null;
-              if (videoId && !thumbnailUrl) {
-                // Try both regular thumbnail and placeholder URLs
-                const directThumbKey = `media/thumbnails/thumbnail_${videoId}.jpg`;
-                const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
-
-                // First try the regular thumbnail
-                let signedUrl = await getSignedUrl(directThumbKey);
-                if (!signedUrl) {
-                  // If that fails, try the placeholder
-                  signedUrl = await getSignedUrl(placeholderKey);
-                }
-
-                if (signedUrl) {
-                  thumbnailUrl = signedUrl;
-                  console.log('Using signed URL for constructed path:', thumbnailUrl);
-                }
-
-                // If this is the last uploaded video and we have a stored URL, use that
-                if (!signedUrl && lastUploadedId && videoId.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
-                  thumbnailUrl = signedThumbnailUrl;
-                  console.log('Using stored direct S3 URL:', thumbnailUrl);
-                }
-              }
-
-              return {
-                id: item.id.toString(),
-                confidence: `${(resultData?.confidence || 0).toFixed(1)}%`,
-                duration: matchedVideo ? `${Math.floor(matchedVideo.Length / 60)}:${(matchedVideo.Length % 60).toString().padStart(2, '0')}` : "00:00",
-                resolution: matchedVideo ? matchedVideo.Resolution : "Unknown",
-                fps: matchedVideo ? `${matchedVideo.Frame_per_Second} fps` : "Unknown",
-                created_at: item.created_at,
-                result: resultData || { is_fake: false, confidence: 0 },
-                thumbnail_url: thumbnailUrl,
-                video_url: matchedVideo ? matchedVideo.video_url : null
-              };
+              resultData = typeof item.result_data === 'string'
+                ? JSON.parse(item.result_data)
+                : item.result_data;
             } catch (e) {
-              console.error('Error processing analysis item:', e);
-              return {
-                id: item.id?.toString() || 'unknown',
-                confidence: '0%',
-                duration: '00:00',
-                resolution: 'Unknown',
-                fps: 'Unknown',
-                created_at: item.created_at || new Date().toISOString(),
-                result: { is_fake: false, confidence: 0 },
-                thumbnail_url: null,
-                video_url: null
-              };
+              console.error('Error parsing result_data:', e);
+              resultData = { is_fake: false, confidence: 0 };
             }
-          }));
+            console.log('Parsed result data:', resultData);
 
-          console.log('Final formatted analyses:', formattedAnalyses);
-          setAnalyses(formattedAnalyses);
+            // Find video ID either from the result_data or from the video URL if available
+            let videoId = null;
+            if (resultData && resultData.video_id) {
+              videoId = resultData.video_id;
+              console.log(`Found video_id ${videoId} in result_data`);
+            } else if (item.video) {
+              // Try to extract video ID from the video URL if present
+              const videoUrlMatch = item.video.match(/\/(\d+)\/$/);
+              if (videoUrlMatch && videoUrlMatch[1]) {
+                videoId = parseInt(videoUrlMatch[1]);
+                console.log(`Extracted video_id ${videoId} from video URL`);
+              }
+            }
 
-          // Select the first result if available
-          if (formattedAnalyses.length > 0) {
-            const firstAnalysis = formattedAnalyses[0];
-            setSelectedResult(firstAnalysis.id);
+            // Get the video by ID
+            const video = videoId ? videoMap[videoId] : null;
+            console.log(`Video lookup for ID ${videoId}:`, video ? 'Found' : 'Not found');
 
-            if (firstAnalysis.thumbnail_url) {
-              setSelectedImage(firstAnalysis.thumbnail_url);
-            } else {
-              const videoId = firstAnalysis.result?.video_id;
-              if (videoId) {
-                const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
-                const signedUrl = await getSignedUrl(placeholderKey);
-                if (signedUrl) {
-                  setSelectedImage(signedUrl);
-                } else {
-                  setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
-                }
+            // If video not found through ID mapping, try to find by comparing URLs
+            let fallbackVideo = null;
+            if (!video && item.video) {
+              fallbackVideo = videos.find((v: any) => v.video_url === item.video);
+              console.log('Fallback video search by URL:', fallbackVideo ? 'Found' : 'Not found');
+            }
+
+            const matchedVideo = video || fallbackVideo;
+            console.log('Final matched video:', matchedVideo);
+
+            // Direct S3 URL construction if we know the video ID but don't have a thumbnail
+            let thumbnailUrl = matchedVideo?.thumbnail_url || null;
+            if (videoId && !thumbnailUrl) {
+              // Try both regular thumbnail and placeholder URLs
+              const directThumbKey = `media/thumbnails/thumbnail_${videoId}.jpg`;
+              const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+
+              // First try the regular thumbnail
+              let signedUrl = await getSignedUrl(directThumbKey);
+              if (!signedUrl) {
+                // If that fails, try the placeholder
+                signedUrl = await getSignedUrl(placeholderKey);
+              }
+
+              if (signedUrl) {
+                thumbnailUrl = signedUrl;
+                console.log('Using signed URL for constructed path:', thumbnailUrl);
+              }
+
+              // If this is the last uploaded video and we have a stored URL, use that
+              if (!signedUrl && lastUploadedId && videoId.toString() === lastUploadedId.toString() && signedThumbnailUrl) {
+                thumbnailUrl = signedThumbnailUrl;
+                console.log('Using stored direct S3 URL:', thumbnailUrl);
+              }
+            }
+
+            return {
+              id: item.id.toString(),
+              confidence: `${(resultData?.confidence || 0).toFixed(1)}%`,
+              duration: matchedVideo ? `${Math.floor(matchedVideo.Length / 60)}:${(matchedVideo.Length % 60).toString().padStart(2, '0')}` : "00:00",
+              resolution: matchedVideo ? matchedVideo.Resolution : "Unknown",
+              fps: matchedVideo ? `${matchedVideo.Frame_per_Second} fps` : "Unknown",
+              created_at: item.created_at,
+              result: resultData || { is_fake: false, confidence: 0 },
+              thumbnail_url: thumbnailUrl,
+              video_url: matchedVideo ? matchedVideo.video_url : null
+            };
+          } catch (e) {
+            console.error('Error processing analysis item:', e);
+            return {
+              id: item.id?.toString() || 'unknown',
+              confidence: '0%',
+              duration: '00:00',
+              resolution: 'Unknown',
+              fps: 'Unknown',
+              created_at: item.created_at || new Date().toISOString(),
+              result: { is_fake: false, confidence: 0 },
+              thumbnail_url: null,
+              video_url: null
+            };
+          }
+        }));
+
+        console.log('Final formatted analyses:', formattedAnalyses);
+        setAnalyses(formattedAnalyses);
+
+        // Select the first result if available
+        if (formattedAnalyses.length > 0) {
+          const firstAnalysis = formattedAnalyses[0];
+          setSelectedResult(firstAnalysis.id);
+
+          if (firstAnalysis.thumbnail_url) {
+            setSelectedImage(firstAnalysis.thumbnail_url);
+          } else {
+            const videoId = firstAnalysis.result?.video_id;
+            if (videoId) {
+              const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+              const signedUrl = await getSignedUrl(placeholderKey);
+              if (signedUrl) {
+                setSelectedImage(signedUrl);
               } else {
                 setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
               }
+            } else {
+              setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
             }
           }
         }
-      } catch (error) {
-        console.error("Error fetching analyses:", error);
-        setError("Failed to load your analyses. Please try again later.");
-      } finally {
-        setIsLoading(false);
       }
-    };
-
+    } catch (error) {
+      console.error("Error fetching analyses:", error);
+      setError("Failed to load your analyses. Please try again later.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  // Fetch analyses effect
+  useEffect(() => {
     fetchAnalyses();
   }, [navigate, locationState]);
 
@@ -481,44 +466,70 @@ export const Dashboard = (): JSX.Element => {
     return analyses.find(a => a.id === selectedResult);
   }, [analyses, selectedResult]);
 
-  // Update handleResultClick to set loading state immediately
+  // Update handleResultClick to lazy-load thumbnails on demand
   const handleResultClick = async (id: string) => {
+    if (selectedResult === id) {
+      return;
+    }
+
+    setIsImageLoading(true); // Show loading spinner immediately
     setSelectedResult(id);
-    setIsImageLoading(true); // Show spinner immediately
+
     const analysis = analyses.find(a => a.id === id);
     setShowDetection(false);
 
-    if (analysis?.thumbnail_url) {
-      const s3Key = getS3KeyFromUrl(analysis.thumbnail_url);
-      if (s3Key) {
-        const objectCheck = await checkS3ObjectExists(s3Key);
-        if (objectCheck.exists || objectCheck.alternateKey) {
-          if (objectCheck.signedUrl) {
-            const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(objectCheck.signedUrl)}`);
-            setSelectedImage(proxyUrl);
-            return;
-          }
+    try {
+      // Get video ID either from the analysis or result data
+      const videoId = analysis?.result?.video_id || null;
+      
+      if (analysis?.thumbnail_url) {
+        // If the thumbnail URL is a direct signed URL (like from a recent upload), use it
+        if (analysis.thumbnail_url.includes('X-Amz-Signature')) {
+          setSelectedImage(analysis.thumbnail_url);
+          setIsImageLoading(false);
+          return;
         }
-      }
-      setSelectedImage(analysis.thumbnail_url);
-    } else {
-      const videoId = analysis?.result?.video_id;
-      if (videoId) {
-        const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
-        const objectCheck = await checkS3ObjectExists(placeholderKey);
-        if (objectCheck.exists || objectCheck.alternateKey) {
-          const finalKey = objectCheck.alternateKey || placeholderKey;
-          const signedUrl = objectCheck.signedUrl || await getSignedUrl(finalKey);
+        
+        // Otherwise get a fresh signed URL
+        const s3Key = getS3KeyFromUrl(analysis.thumbnail_url);
+        if (s3Key) {
+          console.log(`Fetching signed URL for thumbnail: ${s3Key}`);
+          const signedUrl = await getSignedUrl(s3Key);
           if (signedUrl) {
-            const proxyUrl = formatUrl(API_BASE_URL, `proxy-image/?url=${encodeURIComponent(signedUrl)}`);
-            setSelectedImage(proxyUrl);
+            setSelectedImage(signedUrl);
+            setIsImageLoading(false);
             return;
           }
         }
-        setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
-      } else {
-        setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
       }
+      
+      // Try to get a thumbnail by video ID if available
+      if (videoId) {
+        const thumbnailKey = `media/thumbnails/thumbnail_${videoId}.jpg`;
+        const placeholderKey = `media/thumbnails/placeholder_${videoId}.jpg`;
+        
+        // Try the thumbnail first
+        let signedUrl = await getSignedUrl(thumbnailKey);
+        
+        // If that fails, try the placeholder
+        if (!signedUrl) {
+          signedUrl = await getSignedUrl(placeholderKey);
+        }
+        
+        if (signedUrl) {
+          setSelectedImage(signedUrl);
+          setIsImageLoading(false);
+          return;
+        }
+      }
+      
+      // Fallback to placeholder
+      setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+    } catch (error) {
+      console.error('Error loading thumbnail:', error);
+      setSelectedImage('https://placehold.co/600x400?text=No+Thumbnail');
+    } finally {
+      setIsImageLoading(false);
     }
   };
 
@@ -631,6 +642,39 @@ export const Dashboard = (): JSX.Element => {
     handleNewAnalysis();
   }, [analyses, showDetection]); // Depend on analyses and showDetection
 
+  useEffect(() => {
+    const state = location.state as LocationState;
+    if (state?.signedThumbnailUrl || state?.lastUploadedVideoId || state?.videoDuration) {
+      console.log('Location state detected (dashboard):', state);
+      
+      // Clear previous state to prevent flashing old information
+      setSelectedResult(null);
+      setSelectedImage(null);
+      setIsImageLoading(true);
+      
+      if (state.signedThumbnailUrl) {
+        console.log('Using signedThumbnailUrl from state:', state.signedThumbnailUrl);
+        localStorage.setItem('dashboard_thumbnail', state.signedThumbnailUrl);
+        
+        // Immediately set the selected image to the new thumbnail
+        setSelectedImage(state.signedThumbnailUrl);
+      }
+      
+      if (state.lastUploadedVideoId) {
+        console.log('Using lastUploadedVideoId from state:', state.lastUploadedVideoId);
+        localStorage.setItem('dashboard_video_id', state.lastUploadedVideoId);
+      }
+      
+      if (state.videoDuration) {
+        console.log('Using videoDuration from state:', state.videoDuration);
+        localStorage.setItem('dashboard_video_duration', state.videoDuration.toString());
+      }
+      
+      // Immediately trigger a fetch to get the latest data
+      fetchAnalyses();
+    }
+  }, [location]);
+
   return (
     <div className={`dashboard-container ${!isDarkMode ? 'light' : ''}`}>
       <div className="green-circle-container">
@@ -681,7 +725,7 @@ export const Dashboard = (): JSX.Element => {
                     >
                       <div className="result-content">
                         <div className="result-info">
-                          <div className={`status-dot ${item.result?.is_fake ? 'fake' : 'real'}`} />
+                          <div className={`status-dot ${item.result?.confidence === 0 ? 'no-face' : item.result?.is_fake ? 'fake' : 'real'}`} />
                           <span className={`result-id ${!isDarkMode ? 'light' : ''}`}>Result #{item.id}</span>
                         </div>
                         <span className="result-date">
@@ -770,16 +814,48 @@ export const Dashboard = (): JSX.Element => {
             try {
               const analysisResponse = await api.get('/api/analysis/');
               if (analysisResponse.status === 200) {
-                const newAnalyses = analysisResponse.data.map((item: any) => ({
-                  id: item.id.toString(),
-                  confidence: `${(item.result_data?.confidence || 0).toFixed(1)}%`,
-                  duration: "00:00", // This will be updated when video data is fetched
-                  created_at: item.created_at,
-                  result: item.result_data || { is_fake: false, confidence: 0 },
-                  thumbnail_url: null,
-                  video_url: null
-                }));
+                const videoDurationFromState = localStorage.getItem('dashboard_video_duration');
+                const newAnalyses = analysisResponse.data.map((item: any) => {
+                  // Try to get duration from the result data first
+                  let duration = "00:00";
+                  
+                  // Check if the item has duration in its result data
+                  try {
+                    const resultData = typeof item.result === 'string' ? JSON.parse(item.result) : item.result_data;
+                    if (resultData?.duration) {
+                      // Format seconds to MM:SS
+                      const seconds = parseInt(resultData.duration.toString());
+                      const minutes = Math.floor(seconds / 60);
+                      const remainingSeconds = seconds % 60;
+                      duration = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+                    }
+                  } catch (e) {
+                    console.error('Error parsing duration from result data:', e);
+                  }
+                  
+                  // If this is the most recent analysis and we have duration from state, use that
+                  if (item === analysisResponse.data[0] && videoDurationFromState) {
+                    const seconds = parseInt(videoDurationFromState);
+                    const minutes = Math.floor(seconds / 60);
+                    const remainingSeconds = seconds % 60;
+                    duration = `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+                    console.log('Using duration from state for newest analysis:', duration);
+                  }
+                  
+                  return {
+                    id: item.id.toString(),
+                    confidence: `${(item.result_data?.confidence || 0).toFixed(1)}%`,
+                    duration, // Now properly formatted
+                    created_at: item.created_at,
+                    result: item.result_data || { is_fake: false, confidence: 0 },
+                    thumbnail_url: null,
+                    video_url: null
+                  };
+                });
                 setAnalyses(newAnalyses);
+                
+                // Clear the localStorage duration after using it
+                localStorage.removeItem('dashboard_video_duration');
               }
             } catch (error) {
               console.error("Error fetching latest analyses:", error);
@@ -911,10 +987,18 @@ export const Dashboard = (): JSX.Element => {
                       <tbody>
                         {selectedAnalysis && (
                           <tr>
-                            <td style={{ color: selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e', textAlign: 'center' }}>
-                              {selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
+                            <td style={{ 
+                              color: selectedAnalysis.result?.confidence === 0 ? '#eab308' : 
+                                     selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e', 
+                              textAlign: 'center' 
+                            }}>
+                              {selectedAnalysis.result?.confidence === 0 ? 'No face detected' : 
+                               selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
                             </td>
-                            <td className="confidence text-center">
+                            <td className="confidence text-center" style={{ 
+                              color: selectedAnalysis.result?.confidence === 0 ? '#eab308' : 
+                                     selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e'
+                            }}>
                               {selectedAnalysis.confidence}
                             </td>
                             <td className="text-center">
