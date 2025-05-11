@@ -11,7 +11,7 @@ import api from "../api";
 import axios from 'axios';
 import './Auth.css';
 import { Eye, EyeOff } from 'lucide-react';
-const PASSWORD_FIELD_OPACITY = 0.9;
+
 
 interface FormData {
   username: string;
@@ -193,27 +193,33 @@ export const SignUp = () => {
         <form onSubmit={handleSubmit} className="mt-8 space-y-6">
           <div className="space-y-4">
             <div>
+            <div className="relative">
               <Input
                 type="email"
                 placeholder="Email"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                className={`${isDarkMode ? ' border-none text-white' : 'border-gray-300 text-gray-800'} placeholder:text-gray-400`}
                 maxLength={50}
+                style={{ backgroundColor: isDarkMode ? '#333333' : 'white' }}
               />
+              </div>
               {getErrorForField('email') && (
                 <p className="text-red-500 text-sm mt-1">{getErrorForField('email')}</p>
               )}
             </div>
             <div>
+            <div className="relative">
               <Input
                 type="text"
                 placeholder="Username"
                 value={formData.username}
                 onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                className={`${isDarkMode ? 'bg-[#333333] border-none text-white' : 'bg-white border-gray-300 text-gray-800'} placeholder:text-gray-400`}
+                className={`${isDarkMode ? 'border-none text-white' : 'border-gray-300 text-gray-800'} placeholder:text-gray-400`}
                 maxLength={50}
+                style={{ backgroundColor: isDarkMode ? '#333333' : 'white' }}
               />
+              </div>
               {getErrorForField('username') && (
                 <p className="text-red-500 text-sm mt-1">{getErrorForField('username')}</p>
               )}
@@ -225,10 +231,11 @@ export const SignUp = () => {
                   placeholder="Password"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`${isDarkMode ? '!bg-[#3c4336] border-none text-white' : '!bg-[#e2e7da] border border-gray-400 text-gray-800'} placeholder:text-gray-400 pr-10`} // !important to enforce dark bg
+                  className={`${isDarkMode ? 'border-none text-white' : 'border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`} // !important to enforce dark bg
                   autoComplete="new-password"
                   maxLength={50}
-                  style={{ opacity: PASSWORD_FIELD_OPACITY }}
+                  style={{ backgroundColor: isDarkMode ? '#333333' : 'white' }}
+                  
                 />
                 <button
                   type="button"
@@ -250,10 +257,10 @@ export const SignUp = () => {
                   placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  className={`${isDarkMode ? '!bg-[#3c4336] border-none text-white' : '!bg-[#e2e7da] border border-gray-400 text-gray-800'} placeholder:text-gray-400 pr-10`} // !important to enforce dark bg
+                  className={`${isDarkMode ? 'border-none text-white' : 'border-gray-300 text-gray-800'} placeholder:text-gray-400 pr-10`} // !important to enforce dark bg
                   autoComplete="new-password"
                   maxLength={50}
-                  style={{ opacity: PASSWORD_FIELD_OPACITY }}
+                  style={{ backgroundColor: isDarkMode ? '#333333' : 'white' }}
                 />
                 <button
                   type="button"
