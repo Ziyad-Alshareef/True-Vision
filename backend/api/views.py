@@ -1182,7 +1182,7 @@ class ForgotPasswordView(APIView):
                     .logo-title {{
                         font-size: 24px;
                         font-weight: bold;
-                        color: #2563eb;
+                        color: green;
                         margin-bottom: 10px;
                     }}
                     .content {{
@@ -1196,7 +1196,7 @@ class ForgotPasswordView(APIView):
                         font-size: 28px;
                         font-weight: bold;
                         text-align: center;
-                        color: #2563eb;
+                        color: green;
                         padding: 10px;
                         margin: 20px 0;
                         letter-spacing: 5px;
@@ -1235,6 +1235,8 @@ class ForgotPasswordView(APIView):
                     <p>We received a request to reset your password for your True Vision account. Please use the following PIN to verify your identity:</p>
                     <div class="pin">{user.reset_password_pin}</div>
                     <p class="expires">This PIN will expire in 10 minutes.</p>
+                    <br> 
+                    <p>For security reasons, please do not share this PIN with anyone.</p>
                     <p>If you did not request this password reset, please ignore this email or contact support if you have concerns about your account security.</p>
                     <p>Thank you,<br>The True Vision Team</p>
                 </div>
