@@ -799,7 +799,7 @@ export const Dashboard = (): JSX.Element => {
                     >
                       <div className="result-content">
                         <div className="result-info">
-                          <div className={`status-dot ${item.result?.confidence === 0 ? 'no-face' : item.result?.is_fake ? 'fake' : 'real'}`} />
+                          <div className={`status-dot ${item.result?.confidence === 0 || item.result?.confidence === 100 ? 'no-face' : item.result?.is_fake ? 'fake' : 'real'}`} />
                           <span className={`result-id ${!isDarkMode ? 'light' : ''}`}>Result #{item.id}</span>
                         </div>
                         <span className="result-date">
@@ -1062,14 +1062,14 @@ export const Dashboard = (): JSX.Element => {
                         {selectedAnalysis && (
                           <tr>
                             <td style={{ 
-                              color: selectedAnalysis.result?.confidence === 0 ? '#eab308' : 
+                              color: selectedAnalysis.result?.confidence === 0 || selectedAnalysis.result?.confidence === 100 ? '#eab308' : 
                                      selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e', 
                               textAlign: 'center' 
                             }}>
-                              {selectedAnalysis.result?.confidence === 0 ? 'No face detected' : selectedAnalysis.result?.confidence === 1 ? 'Processing...' : selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
+                              {selectedAnalysis.result?.confidence === 0 || selectedAnalysis.result?.confidence === 100 ? 'No face detected' : selectedAnalysis.result?.confidence === 1 ? 'Processing...' : selectedAnalysis.result?.is_fake ? 'Fake' : 'Real'}
                             </td>
                             <td className="confidence text-center" style={{ 
-                              color: selectedAnalysis.result?.confidence === 0 ? '#eab308' : 
+                              color: selectedAnalysis.result?.confidence === 0 || selectedAnalysis.result?.confidence === 100 ? '#eab308' : 
                                      selectedAnalysis.result?.is_fake ? '#ef4444' : '#22c55e'
                             }}>
                               {selectedAnalysis.confidence}
