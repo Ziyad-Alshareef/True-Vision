@@ -9,6 +9,7 @@ from .serializers import CustomUserSerializer, AnalysisSerializer, VideoSerializ
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework import serializers
 import boto3
+from datetime import datetime
 from django.conf import settings
 from botocore.exceptions import ClientError
 import os
@@ -1157,15 +1158,111 @@ class ForgotPasswordView(APIView):
             from django.conf import settings
             from_email = settings.DEFAULT_FROM_EMAIL
             
+            # Create HTML email template with the logo and styling
+            html_message = f'''
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>True Vision Password Reset</title>
+                <style>
+                    body {{
+                        font-family: Arial, sans-serif;
+                        line-height: 1.6;
+                        color: #333;
+                        max-width: 600px;
+                        margin: 0 auto;
+                        padding: 20px;
+                    }}
+                    .header {{
+                        text-align: center;
+                        margin-bottom: 30px;
+                    }}
+                    .logo-title {{
+                        font-size: 24px;
+                        font-weight: bold;
+                        color: #2563eb;
+                        margin-bottom: 10px;
+                    }}
+                    .content {{
+                        background-color: #f9f9f9;
+                        border-radius: 8px;
+                        padding: 30px;
+                        margin-bottom: 20px;
+                        border: 1px solid #eee;
+                    }}
+                    .pin {{
+                        font-size: 28px;
+                        font-weight: bold;
+                        text-align: center;
+                        color: #2563eb;
+                        padding: 10px;
+                        margin: 20px 0;
+                        letter-spacing: 5px;
+                    }}
+                    .footer {{
+                        font-size: 12px;
+                        text-align: center;
+                        color: #666;
+                        margin-top: 30px;
+                    }}
+                    .button {{
+                        display: inline-block;
+                        background-color: #2563eb;
+                        color: white;
+                        text-decoration: none;
+                        padding: 10px 20px;
+                        border-radius: 4px;
+                        margin-top: 20px;
+                    }}
+                    .expires {{
+                        color: #e53e3e;
+                        font-style: italic;
+                        margin-top: 15px;
+                        text-align: center;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <!-- You can add the logo image here -->
+                    <div class="logo-title">TRUE VISION</div>
+                    <h2>Password Reset</h2>
+                </div>
+                <div class="content">
+                    <p>Hello,</p>
+                    <p>We received a request to reset your password for your True Vision account. Please use the following PIN to verify your identity:</p>
+                    <div class="pin">{user.reset_password_pin}</div>
+                    <p class="expires">This PIN will expire in 10 minutes.</p>
+                    <p>If you did not request this password reset, please ignore this email or contact support if you have concerns about your account security.</p>
+                    <p>Thank you,<br>The True Vision Team</p>
+                </div>
+                <div class="footer">
+                    <p>© {datetime.now().year} True Vision. All rights reserved.</p>
+                    <p>This is an automated message, please do not reply to this email.</p>
+                </div>
+            </body>
+            </html>
+            '''
+            
+            # Plain text version as fallback
+            text_message = f"Your True Vision password reset PIN is {user.reset_password_pin}. It is valid for 10 minutes."
+            
             # Send email with the PIN
             try:
-                send_mail(
-                    'Password Reset PIN',
-                    f'Your PIN is {user.reset_password_pin}. It is valid for 10 minutes.',
+                from django.core.mail import EmailMultiAlternatives
+                
+                # Create email message with both HTML and text versions
+                email_message = EmailMultiAlternatives(
+                    'True Vision Password Reset',
+                    text_message,
                     from_email,
-                    [user.email],
-                    fail_silently=False,
+                    [user.email]
                 )
+                email_message.attach_alternative(html_message, "text/html")
+                email_message.send()
+                
                 logger.info(f"Password reset PIN email sent to: {email} from {from_email}")
                 return Response({"message": "PIN sent to your email"}, status=status.HTTP_200_OK)
             except Exception as e:
