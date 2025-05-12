@@ -535,7 +535,7 @@ def detect_deepfake(video_obj):
             frame_no += 1
             
             # Early stopping for very long videos
-            if frame_no > 300:  # Limit to 300 frames (30 processed frames at interval 10)
+            if frame_no > 300:  # Limit to 300 frames (100 processed frames at interval 3)
                 logger.info(f"Early stopping at frame {frame_no} to limit processing time")
                 break
         
@@ -557,10 +557,22 @@ def detect_deepfake(video_obj):
             logger.warning("No faces detected in video, returning default values of 0")
             
         # Determine if the video is fake based on thresholds
-        is_fake = max_prob > 0.7 or (avg_prob > 0.5 and deepfake_pct > 30)
-        confidence = max(max_prob * 100, avg_prob * 100)
+        is_fake = avg_prob > 0.5
+        #confidence = max(max_prob * 100, avg_prob* 100)
+        if avg_prob <= 0.5:
+            confidence = (1-avg_prob) * 100
+        elif avg_prob > 0.5:
+            confidence = avg_prob * 100
+
+        if confidence >= 50 and confidence < 60:
+            confidence*=1.25
+        elif confidence >= 60 and confidence < 70:
+            confidence*=1.18
+        elif confidence >= 70 and confidence < 80:
+            confidence*=1.1
+
         logger.info(f"Final detection result: is_fake={is_fake}, confidence={confidence:.2f}%")
-        
+        logger.info(f" deepfake percentage {deepfake_pct}, avg probability {avg_prob}, max probability {max_prob} thus is_fake {is_fake} and confidence {confidence}")
         # Calculate processing time
         elapsed_time = time.time() - start_time
         logger.info(f"Detection completed in {elapsed_time:.2f} seconds")
