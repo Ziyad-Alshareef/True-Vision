@@ -129,6 +129,7 @@ const getSignedUrl = async (s3Key: string): Promise<string | null> => {
       const legacyResponse = await api.get(`/api/s3/signed-url/?key=${encodeURIComponent(cleanKey)}`);
       if (legacyResponse.status === 200 && legacyResponse.data && legacyResponse.data.signed_url) {
         console.log(`Got signed URL from legacy endpoint for ${cleanKey}:`, legacyResponse.data.signed_url);
+        //setIsImageLoading(false);
         return legacyResponse.data.signed_url;
       
     }
@@ -523,7 +524,7 @@ export const Dashboard = (): JSX.Element => {
         
         if (signedUrl) {
           setSelectedImage(signedUrl);
-          setIsImageLoading(false);
+          //setIsImageLoading(false);
           return;
         }
       }
@@ -626,7 +627,7 @@ export const Dashboard = (): JSX.Element => {
               }
             }
           }
-          setSelectedImage(latestAnalysis.thumbnail_url);
+          //setSelectedImage(latestAnalysis.thumbnail_url);
         } else if (latestAnalysis.result?.video_id) {
           const placeholderKey = `media/thumbnails/placeholder_${latestAnalysis.result.video_id}.jpg`;
           const objectCheck = await checkS3ObjectExists(placeholderKey);
