@@ -952,7 +952,7 @@ export const Dashboard = (): JSX.Element => {
                         <img
                           key={selectedImage}
                           src={selectedImage}
-                          alt=""
+                          alt=" "
                           className="w-full h-full object-contain"
                           style={{
                             opacity: isImageLoading ? 0 : 1,
