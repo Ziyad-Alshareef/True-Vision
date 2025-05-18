@@ -196,7 +196,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'true.vision.ksu@gmail.com'
-EMAIL_HOST_PASSWORD ='jkuo yhyx nmiy xost ' #'Truevision123'
+EMAIL_HOST_PASSWORD ='qvav guze mujd krzp ' #'Truevision123'
 DEFAULT_FROM_EMAIL = 'true.vision.ksu@gmail.com'
 
 # Email settings section ends here
