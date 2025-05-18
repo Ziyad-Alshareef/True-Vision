@@ -195,9 +195,9 @@ EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'true.vision.ksu@gmail.com'
-EMAIL_HOST_PASSWORD ='qvav guze mujd krzp ' #'Truevision123'
-DEFAULT_FROM_EMAIL = 'true.vision.ksu@gmail.com'
+EMAIL_HOST_USER = 'true.vision.resetpass@gmail.com'
+EMAIL_HOST_PASSWORD ='ceok qyzz tuzq eczi ' #'Truevision123'
+DEFAULT_FROM_EMAIL = 'true.vision.resetpass@gmail.com'
 
 # Email settings section ends here
 
