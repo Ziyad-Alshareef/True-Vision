@@ -5,7 +5,7 @@ import time
 import json
 from django.conf import settings
 from .models import DeepFakeDetection, Detection
-from .views import conf
+from .utils import conf
 
 # Set up logger
 logger = logging.getLogger(__name__)

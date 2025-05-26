@@ -1337,11 +1337,6 @@ class ResetPasswordView(APIView):
             logger.warning(f"User with email {email} not found")
             return Response({"error": "Email not found"}, status=status.HTTP_404_NOT_FOUND)
 
-def conf(con):
-    con*=(100-con)*0.006+1
-    return con
-
-
 class TestEmailView(APIView):
     """
     Endpoint to test email sending functionality
