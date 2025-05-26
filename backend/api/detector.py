@@ -5,6 +5,7 @@ import time
 import json
 from django.conf import settings
 from .models import DeepFakeDetection, Detection
+from .views import conf
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -558,19 +559,14 @@ def detect_deepfake(video_obj):
             
         # Determine if the video is fake based on thresholds
         is_fake = avg_prob > 0.5
-        #confidence = max(max_prob * 100, avg_prob* 100)
+        
         if avg_prob <= 0.5:
-            confidence = (1-avg_prob) * 100
+            cprob = (1-avg_prob) * 100
         elif avg_prob > 0.5:
-            confidence = avg_prob * 100
+            cprob = avg_prob * 100
 
-        if confidence >= 50 and confidence < 60:
-            confidence*=1.25
-        elif confidence >= 60 and confidence < 70:
-            confidence*=1.18
-        elif confidence >= 70 and confidence < 80:
-            confidence*=1.1
-
+        confidence = conf(cprob)
+        
         logger.info(f"Final detection result: is_fake={is_fake}, confidence={confidence:.2f}%")
         logger.info(f" deepfake percentage {deepfake_pct}, avg probability {avg_prob}, max probability {max_prob} thus is_fake {is_fake} and confidence {confidence}")
         # Calculate processing time
@@ -661,3 +657,6 @@ def detect_deepfake(video_obj):
                 torch.cuda.empty_cache()
             except:
                 pass 
+
+
+
